@@ -13,7 +13,15 @@ def urlify(s):
     s = re.sub(r"\s+", '+', s) # Replaces all runs of whitespace with a single +
     return s
 
-class mangabeeHTMLParser(HTMLParser):
+def onlyNumbers(s):
+    s = re.sub(r'[^\d.]+', '', s) # Remove all characters and whitespace
+    return s
+
+
+def onlyNumbersSplit(s):
+    return s.split(' ', 1)[0]
+
+class mangabeeSetupParser(HTMLParser):
     def __init__(self):
         HTMLParser.__init__(self)
         self.inLink = False
@@ -30,7 +38,13 @@ class mangabeeHTMLParser(HTMLParser):
             attrs = dict(attrs)
             self.lastTag = 'select'
             if (attrs.get('class') == 'cbo_wpm_pag'):
-                print(attrs)
+                self.lastClass = 'cbo_wpm_pag'
+
+        if (tag == 'option' and self.lastClass == 'cbo_wpm_pag'):
+            self.inLink = True
+            self.lastTag = 'option'
+
+
         if (tag == 'select'):  # The tag with chapter data.
             self.inLink = True
             attrs = dict(attrs)
@@ -44,18 +58,7 @@ class mangabeeHTMLParser(HTMLParser):
             self.lastTag = 'img'
             if (attrs.get('class') == 'manga-page'): # Found tag with manga image.
                 self.lastClass = 'manga-page'
-                print(attrs.get('src'))
-
-        if (tag == 'h2'): # The tag with all the page data.
-            self.inLink = True
-            attrs = dict(attrs) # Makes it easier to iterate through tag.
-            self.lastTag = 'h2'
-            if (attrs.get('class') == 'wpm_tip lnk_cnr'): # Found tag with manga image.
-                self.lastClass = 'wpm_tip lnk_cnr'
-
-        if (tag == 'a' and self.lastClass == 'wpm_tip lnk_cnr'):
-            self.inLink = True
-            self.lastTag = 'a'
+                self.src.append(attrs.get('src')) # Add example src.
 
     def handle_endtag(self, tag):
         if (tag == 'select' and self.lastClass =='cbo_wpm_chp'): # The tag with chapter data.
@@ -71,20 +74,17 @@ class mangabeeHTMLParser(HTMLParser):
             self.inLink = False
             self.lastTag = None
             self.lastClass = None
-        if (tag == 'h2'): # The tag with all the page data.
-            self.inLink = False
-            self.lastTag = None
-            self.lastClass = None
-
         pass
 
     def handle_data(self, data):
         if (self.lastClass == 'cbo_wpm_chp' and self.first_occurrence == False):
             self.chapters.append(data)
-        if (self.lastClass == 'wpm_tip lnk_cnr' and self.lastTag == 'a'):
-            print(data)
+        if (self.lastClass == 'cbo_wpm_pag' and self.lastTag == 'option'):
             self.pages.append(data)
         pass
+
+# class mangabeeDownloader(HTMLParser):
+
 
 class mangabeeSearchParser(HTMLParser):
     def __init__(self):
@@ -150,7 +150,7 @@ def main():
     event_types = ("start", "end")
     # urllibee.test()
     # urllibee.retrieve('https://archive.org/download/testmp3testfile/testmp3testfile_64kb_mp3.zip', '')
-    req = urllib.request.Request('http://www.mangabee.com/Tokyo_Ghoul/2/1/')
+    req = urllib.request.Request('http://www.mangabee.com/Tokyo_Ghoul/1/1/')
     req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36')
     req.add_header('Content-Type', 'text/plain; charset=utf-8 ')
     req.add_header('Accept', '*/*')
@@ -161,11 +161,22 @@ def main():
     if res.info().get('Content-Encoding') == 'gzip':
         with gzip.open(res, 'rb') as f: #rb readbinary
 
-            parser = mangabeeHTMLParser()
+            parser = mangabeeSetupParser()
             content = f.read().decode('utf-8');
             bytes += sys.getsizeof(content)
             parser.feed(content)
-
+            # print(parser.src)
+            # print(parser.pages)
+            # for x in parser.chapters:
+            #     print(x)
+            # for i in range(0, len(parser.chapters)):
+            #     parser.chapters[i] = onlyNumbersSplit(parser.chapters[i])
+            # print(parser.chapters)
+            # for x in parser.chapters:
+            #     print(x)
+            for x in [e for e in parser.chapters if 'Raw' not in e]:
+                print(x)
+            # print(sorted(parser.chapters, key = lambda x: int(x.split('.')[0])) )
             pass
 
     # print( search('Tokyo Ghoul') )
