@@ -3,9 +3,9 @@
 REM Allows the use of !var[%%x]! ! for expansion of variable.
 setlocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
-set repo[1]=https://github.com/tadachi/urlibee.git
+set repo[1]=https://github.com/tadachi/urllibee.git
 
-set directory[1]=urlibee
+set directory[1]=urllibee
 
 REM full path to current directory including drive.
 REM set mypath=%~dp0

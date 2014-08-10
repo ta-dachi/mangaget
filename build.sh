@@ -1,8 +1,8 @@
 #!/bin/bash
 
-repo[0]='https://github.com/tadachi/urlibee.git'
+repo[0]='https://github.com/tadachi/urllibee.git'
 
-directory[0]='urlibee'
+directory[0]='urllibee'
 
 for i in {0..1}
 do
