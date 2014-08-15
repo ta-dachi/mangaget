@@ -1,262 +1,175 @@
 import sys
 sys.path.append('C:/Users/tadachi/Desktop/Dropbox/git/')
-import urllibee.f
 
 import re
 import os
 import logging
 
-from html.parser import HTMLParser
 import urllib.request
+import urllib.parse
 import gzip
 
 import concurrent.futures
 import requests
+import eventlet
 
+from mangabee_parsers import *
+from mangahere_parsers import *
+
+import time
+from random import randint
+
+import json
 ###
 ### Config
 ###
 logging.basicConfig(filename='downloader.py.log', filemode='w', level=logging.DEBUG)
+requests_log = logging.getLogger("requests")
+requests_log.setLevel(logging.WARNING) #Disable logging for requests by setting it to WARNING which we won't use.
 
-def urlify(s):
-    s = re.sub(r"[^\w\s-]", '', s) # Remove all non-word characters (everything except numbers and letters)
-    s = re.sub(r"\s+", '+', s) # Replaces all runs of whitespace with a single +
-    return s
-
-def onlyNumbers(s):
-    s = re.sub(r'[^\d.]+', '', s) # Remove all characters and whitespace
-    return s
-
-def onlyNumbersSplit(s):
-    return s.split(' ', 1)[0]
-
-class mangabeeSearchParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self)
-        self.inLink = False
-        self.lastTag = None
-        self.lastClass = None
-        self.links = []         # Where we store our results
-
-    def handle_starttag(self, tag, attrs):
-        if (tag == 'div'):
-            attrs = dict(attrs)
-            self.lastTag = 'div'
-            if (attrs.get('class') == 'nde'):
-                self.inLink = True
-                self.lastClass ='nde'
-        if (self.lastClass == 'nde'):
-            if (tag == 'div'):
-                attrs = dict(attrs)
-                if (attrs.get('class') == 'cvr'):
-                    self.lastClass ='cvr'
-        if (self.lastTag == 'div' and tag == 'a' and self.lastClass == 'cvr'):
-            self.lastTag = 'a'
-            attrs = dict(attrs)                       # example output: {'href': 'http://www.mangabee.com/Tokyo_Ghoul/'}
-            self.links.append( attrs.get('href') )     #['http://www.mangabee.com/Tokyo_Ghoul', ...]
-
-    def handle_endtag(self, tag):
-        if (tag == 'div'):
-            self.inLink = False
-            self.lastTag = None
-            self.lastClass = None
-
-    def handle_data(self, data):
-        pass
-
-class mangabeeSetupParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self)
-        self.inLink = False
-        self.lastTag = None
-        self.lastClass = None
-        self.pages = []
-        self.chapters = []
-        self.src = []
-        self.first_occurrence = False
-
-    def handle_starttag(self, tag, attrs):
-        if (tag == 'select'): # The tag with pages data.
-            self.inLink = True
-            attrs = dict(attrs)
-            self.lastTag = 'select'
-            if (attrs.get('class') == 'cbo_wpm_pag'):
-                self.lastClass = 'cbo_wpm_pag'
-
-        if (tag == 'option' and self.lastClass == 'cbo_wpm_pag'):
-            self.inLink = True
-            self.lastTag = 'option'
-
-        if (tag == 'select'):  # The tag with chapter data.
-            self.inLink = True
-            attrs = dict(attrs)
-            self.lastTag = 'select'
-            if (attrs.get('class') == 'cbo_wpm_chp'):
-                self.lastClass = 'cbo_wpm_chp'
-
-        if (tag == 'img'): # Wade through html to find img tag.
-            self.inLink = True
-            attrs = dict(attrs)  # The tag with image data and location.
-            self.lastTag = 'img'
-            if (attrs.get('class') == 'manga-page'): # Found tag with manga image.
-                self.lastClass = 'manga-page'
-                self.src.append(attrs.get('src')) # Add example src. Need lots of string manipulation to generate image links
-
-    def handle_endtag(self, tag):
-        if (tag == 'select' and self.lastClass =='cbo_wpm_chp'): # The tag with chapter data.
-            self.inLink = False
-            self.lastTag = None
-            self.lastClass = None
-            self.first_occurrence = True # Chapter selection occurs twice so, only add chapters once.
-        if (tag == 'select'): # The tag with chapter data.
-            self.inLink = False
-            self.lastTag = None
-            self.lastClass = None
-        if (tag == 'img'): # The tag with image data and location.
-            self.inLink = False
-            self.lastTag = None
-            self.lastClass = None
-
-    def handle_data(self, data):
-        if (self.lastClass == 'cbo_wpm_chp' and self.first_occurrence == False):
-            self.chapters.append(data)
-        if (self.lastClass == 'cbo_wpm_pag' and self.lastTag == 'option'):
-            self.pages.append(data)
-
-
-class mangabeeHTMLGetImageLink(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self)
-        self.inLink = False
-        self.lastTag = None
-        self.lastClass = None
-        self.pages = []
-        self.src = None
-
-    def handle_starttag(self, tag, attrs):
-        if (tag == 'select'): # The tag with pages data.
-            self.inLink = True
-            attrs = dict(attrs)
-            self.lastTag = 'select'
-            if (attrs.get('class') == 'cbo_wpm_pag'):
-                self.lastClass = 'cbo_wpm_pag'
-
-        if (tag == 'option' and self.lastClass == 'cbo_wpm_pag'):
-            self.inLink = True
-            self.lastTag = 'option'
-
-        if (tag == 'img'): # Wade through html to find img tag.
-            self.inLink = True
-            attrs = dict(attrs)  # The tag with image data and location.
-            self.lastTag = 'img'
-            if (attrs.get('class') == 'manga-page'): # Found tag with manga image.
-                self.lastClass = 'manga-page'
-                self.src = attrs.get('src') # Add example src.
-
-    def handle_endtag(self, tag):
-        if (tag == 'select'): # The tag with chapter data.
-            self.inLink = False
-            self.lastTag = None
-            self.lastClass = None
-
-        if (tag == 'img'): # The tag with image data and location.
-            self.inLink = False
-            self.lastTag = None
-            self.lastClass = None
-
-    def handle_data(self, data):
-        if (self.lastClass == 'cbo_wpm_pag' and self.lastTag == 'option'):
-            self.pages.append(data)
-
-        pass
-
-def search(manga_name):
-    global bytes
-    url = 'http://www.mangabee.com/manga-list/search/%s/name-az/1' % urlify(manga_name)
+#
+# Search for manga on specified manga site.
+#
+def search(manga_name, manga_site): # 1 request.
+    mangabee_url = 'http://www.mangabee.com/manga-list/search/%s/name-az/1' % mangabee_urlify(manga_name)
+    mangahere_url = 'http://www.mangahere.co/search.php?name=%s' % urllib.parse.quote(mangahere_urlify(manga_name))
 
     results = None
-    req = urllib.request.Request(url) # Need headers so that the server does not deny request.
-    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36')
-    req.add_header('Content-Type', 'text/plain; charset=utf-8 ')
-    req.add_header('Accept', '*/*')
-    req.add_header('Accept-Encoding', 'gzip,deflate,sdch')
+    parser = None
 
-    res = urllib.request.urlopen(req)
-    bytes += sys.getsizeof(res) # Add bandwidth usage (GZIP compressed.)
+    if (manga_site == 'mangahere'):
+        req = requestContentWithHeaders(mangahere_url)
+        parser = mangahereSearchParser()
+    elif (manga_site == 'mangabee'):
+        req = requestContentWithHeaders(mangabee_url)
+        parser = mangabeeSearchParser()
+    else:
+        print("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
+        logging.info("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
+        return False
 
-    if res.info().get('Content-Encoding') == 'gzip':
-        with gzip.open(res, 'rb') as f: #rb readbinary
-            content = f.read().decode('utf-8')
-            # bytes += sys.getsizeof(content) # Add bandwidth usage. (UNCOMPRESSED adds way more bytes by 100x)
-            parser = mangabeeSearchParser()
-            parser.feed(content)
-            results = parser.links # Save our results
-            parser.close
-            f.close()
-    return results
+    parser.feed(req)         # req contains all the html from url.
+    results = parser.links   # Save our results.
+    parser.close             # Free the parser resource.
 
-def setup(url):
-    global bytes
-    url = url + '1/1'
-    src = None
+    return results # ['http://www.mangabee.com/blood-c/'] ['http://www.mangahere.co/manga/blood_c/']
+
+
+#
+# Search for manga on specified manga site.
+#
+def download(url, manga_site): # 1 request.
+    src = None # Mangabee
     chapters = None
     pages = None
 
-    res = requestHTMLWithPageImage(url)
-    bytes += sys.getsizeof(res) # Add bandwidth usage (GZIP compressed.)
-    if res.info().get('Content-Encoding') == 'gzip':
-        with gzip.open(res, 'rb') as f: #rb readbinary
+    links = None # Mangahere
+    if (manga_site == 'mangahere'):
+        parser = mangahereVolumeChapterParser() # Grabs all the chapters from the manga's html page.
+        req = requestWithHeaders(url)
+        parser.feed(req.text)
+        links = parser.links
+        results = dict(links=links)
+        parser.close
 
-            parser = mangabeeSetupParser()
-            content = f.read().decode('utf-8')
-            # bytes += sys.getsizeof(content) # Add bandwidth usage. (UNCOMPRESSED adds way more bytes by 100x)
-            parser.feed(content)
+        return results # {['http://www.mangahere.co/manga/hack_legend_of_twilight/v03/c000.4/' ... 'http://www.mangahere.co/manga/hack_legend_of_twilight/v03/c000.3/'}
+    elif (manga_site == 'mangabee'):
+        url = url + '1/1'
+        parser = mangabeeSetupParser()
+        req = requestWithHeaders(url)
 
-            src = parser.src
-            pages = parser.pages
-            chapters = [e for e in parser.chapters if 'Raw' not in e] # all chapters with Raw are untranslated so filter them out.
-            chapters = [onlyNumbersSplit(e) for e in chapters] # Leave only the numbers and strip chracters
-            chapters = sorted(chapters, key = lambda x: int(x.split('.')[0]))
+        parser.feed(req.text)
 
-            parser.close
+        src = parser.src
+        pages = parser.pages
 
-    return dict(url=[url], src=src, chapters=chapters, pages=pages, ) # url comes in as string but we want it as a string in a list
+        chapters = [e for e in parser.chapters if 'Raw' not in e] # all chapters with Raw are untranslated so filter them out.
+        chapters = [onlyNumbersSplit(e) for e in chapters] # Leave only the numbers and strip chracters
+        chapters = sorted(chapters, key = lambda x: int(x.split('.')[0]))
 
-def downloadMangaChapters(setupList):
-    chapter_urls = []
-    first_chapter_url = setupList.get('url')[0].rsplit('/', 2)[0] # http://www.mangabee.com/Tokyo_Ghoul
-    chapter_numbers = setupList.get('chapters')
-    main_directory = 'manga'
+        parser.close
+        results = dict(url=[url], src=src, chapters=chapters, pages=pages)
 
-    for i in range(0, len(setupList.get('chapters'))):
-        chapter_urls.append( "".join([first_chapter_url, '/', setupList.get('chapters')[i], '/', '1']) ) # [ http://www.mangabee.com/Tokyo_Ghoul/1/1, ..., http://www.mangabee.com/Tokyo_Ghoul/137/1 ]
+        return results # {'chapters': ['1', ... '9'], 'src': ['http://i3.mangareader.net/blood-c/1/blood-c-2691771.jpg'], 'url': ['http://www.mangabee.com/blood-c/1/1'], 'pages': ['1', ...', '40']}
+    else:
+        print("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
+        logging.info("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
+        return False
 
-    # if ( len(setupList.get('chapters')) == len(chapter_urls) ):
-    #     print ('Numbers of chapters and lists match.')
+def mangahereSetupAndDownload(setup_list): # 0 requests.
+    chapter_urls = sorted(setup_list.get('links')) # They come in reversed from mangahere.
 
-    manga_name = chapter_urls[0].rsplit('/',3)[1]
-    base_directory = manga_name
-    full_directory = "".join([main_directory,'\\',base_directory,'\\',manga_name])
+    first_chapter_url = chapter_urls[0] # http://www.mangahere.co/manga/hack_legend_of_twilight/v03/c000.4/
+    # http://www.mangahere.co/manga/tora_kiss_a_school_odyssey/
+    main_directory = 'mangahere'
 
-    if not os.path.exists(main_directory): # manga/
-        os.mkdir(main_directory) # manga/
+    # volume based: ['http:', '', 'www.mangahere.co', 'manga', 'hack_legend_of_twilight', 'v01', 'c000', ''] count: 8
+    # !volumebased: ['http:', '', 'www.mangahere.co', 'manga', 'tora_kiss_a_school_odyssey', 'c001.1', '']  count: 7
+    if (len(first_chapter_url.split('/')) < 8):
+        manga_name = first_chapter_url.rsplit('/',4)[2]  # parse the url for something like this this: 'tokyo_ghoul'
+    else:
+        manga_name = first_chapter_url.rsplit('/',4)[1]  # parse the url for something like this this: 'tokyo_ghoul'
+
+    base_directory = manga_name                    # 'tokyo_ghoul'
+
+    if not os.path.exists(main_directory): # directory: ..mangahere/
+        os.mkdir(main_directory) # directory: ..mangahere/
         logging.info("".join(['Created directory: ', main_directory]))
 
+    d = "".join([main_directory,'\\',base_directory]) # ..mangahere/tokyo_ghouls/
+    if not os.path.exists(d):
+        os.mkdir(d) # ..mangahere/tokyo_ghouls/
+        logging.info("".join(['Created directory: ', d]))
+
+    full_directory = "".join([main_directory,'\\',base_directory,'\\',manga_name]) # mangahere\Tokyo_Ghoul\Tokyo_Ghoul - chapter number will be appended.
+    # for i in range( 0, len(chapter_urls) ):
+    for i in range( 0, 1 ): # Testing
+        chapter_number = chapter_urls[i].rsplit('/',2)[1]
+        chapter_directory = "".join( [full_directory, '_', chapter_number] )  # 'mangahere\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
+        if not os.path.exists(chapter_directory):
+            os.mkdir(chapter_directory) # Create chapter directory: '../mangahere/Tokyo_Ghoul_001/'
+
+        mangahereDownloadPagesForChapter(chapter_urls[i], chapter_directory, chapter_number)
+
+    return True
+
+
+def mangabeeSetupAndDownload(setup_list): # 0 requests.
+    chapter_urls = []
+    first_chapter_url = setup_list.get('url')[0].rsplit('/', 2)[0] # http://www.mangabee.com/Tokyo_Ghoul
+    chapter_numbers = setup_list.get('chapters')
+    main_directory = 'mangabee'
+
+    for i in range(0, len(setup_list.get('chapters'))):
+        chapter_urls.append( "".join([first_chapter_url, '/', setup_list.get('chapters')[i], '/', '1']) ) # [ http://www.mangabee.com/Tokyo_Ghoul/1/1, ..., http://www.mangabee.com/Tokyo_Ghoul/137/1 ]
+
+    if ( len(setup_list.get('chapters')) == len(chapter_urls) ):
+        # print ('Numbers of chapters and lists match.')
+        pass
+    else:
+        logging.info("".join(['Number of chapters and chapter urls do not match. Check for HTML/CSS abnormalities on the website for that manga.', image_files_paths[0]]))
+        return False
+
+    manga_name = chapter_urls[0].rsplit('/',3)[1]  # parse the url for something like this this: 'tokyo_ghoul'
+    base_directory = manga_name                    # 'tokyo_ghoul'
+
+    if not os.path.exists(main_directory): # directory: ..mangabee/
+        os.mkdir(main_directory) # directory: ..mangabee/
+        logging.info("".join(['Created directory: ', main_directory]))
 
     d = "".join([main_directory,'\\',base_directory]) # manga/tokyo_ghouls/
     if not os.path.exists(d):
         os.mkdir(d) # manga/tokyo_ghouls/
         logging.info("".join(['Created directory: ', d]))
 
+    full_directory = "".join([main_directory,'\\',base_directory,'\\',manga_name]) # manga\Tokyo_Ghoul\Tokyo_Ghoul  _0XX will be appended to this.
     # for i in range( 0, len(chapter_urls) ):
-    for i in range( 0, 1 ):
-        chapter_directory = "".join( [full_directory, '_', mangaNumbering(chapter_numbers[i])] )  # 'Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
+    for i in range( 0, 1 ): # Testing one chapter.
+        chapter_directory = "".join( [full_directory, '_', mangaNumbering(chapter_numbers[i])] )  # 'manga\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
         if not os.path.exists(chapter_directory):
             os.mkdir(chapter_directory) # Create chapter directory: '../manga/Tokyo_Ghoul_001/'
-        downloadPagesForChapter(chapter_urls[i], chapter_directory)
-
-    # print(setupList.get('src'))
-    # print(setupList.get('src')[0].rsplit('/', 3))
+        mangabeeDownloadPagesForChapter(chapter_urls[i], chapter_directory)
+        break
 
     return True
 
@@ -268,69 +181,235 @@ def mangaNumbering(s):
     elif (len(s) == 3):
         return s                # 100, 211, 321 ... 599
 
-    logging.info('Abnormal numbering encountered')
+    logging.info('Abnormal numbering encountered') # Multiple requests.
     return "".join(['0',s])
 
-
-def downloadPagesForChapter(chapterUrl, directory):
-    # print(chapterId + ':' + chapterUrl)
-    global bytes
-    pages = None
+def mangahereDownloadPagesForChapter(chapter_url, directory, chapter_number):
+    pages_and_src = []
+    page_urls = [] # Holds a reference to the image on mangabee's CDN. You need to parse its HTML for that CDN image link.
+    page_numbers = [] # Holds all the links to the images on Mangabee's CDN.
     pages_src = []
     image_files_paths = []
+
+    req = requestWithHeaders(chapter_url) # 1 requests
+
+    parser = mangahereHTMLGetImageLinks()
+    parser.feed(req.text)
+
+    page_urls = parser.page_links
+    page_numbers = parser.page_numbers
+
+    parser.close
+
+    for page in page_numbers:
+        file_path = "".join([directory, '\\', mangaNumbering(page), '.jpg'])
+        image_files_paths.append( file_path )
+
+    parser = mangahereHTMLGetImageSrcs()
+
+    # We can use a with statement to ensure threads are cleaned up promptly
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor: # Multiple requests.
+        # download the load operations and mark each future with its URL
+        future_to_url = {executor.submit(requestContentWithHeadersAndKey, url, page): [url,page] for url,page in zip(page_urls,page_numbers)}
+        for future in concurrent.futures.as_completed(future_to_url):
+            url = future_to_url[future]
+            try:
+                html_data = future.result()
+                # print(html_data)
+                parser.feed(html_data.get('html'))
+                pages_and_src.append( {'page': mangaNumbering(html_data['page']), 'src':parser.src + 'd'} )
+                parser.reset # Clear contents of parser.
+            except Exception as exc:
+                logging.debug( '%r generated an exception: %s' % (url, exc) )
+
+    pages_and_src = sorted(pages_and_src, key=lambda k: k['page'])
+
+    for dic in pages_and_src:
+        pages_src.append(dic.get('src'))
+
+    # print(page_urls)
+    # print(page_numbers)
+    # print(image_files_paths)
+    # print(pages_and_src)
+
+    # Build manga chapter integrity json file.
+    data = {}
+    data['chapter_url'] = chapter_url
+    data['image_files_paths'] = image_files_paths
+    data['pages_and_src'] = pages_and_src
+    data['len'] = len(image_files_paths)
+    data['chapter_number'] = chapter_number
+    data['downloaded'] = 'Not downloaded'
+    writeToJson(data, "".join([directory, '.json']))
+
+    # print(len(pages_and_src))
+    # print(len(image_files_paths))
+    # print(len(page_urls))
+
+    if ( len(pages_and_src) == len(image_files_paths) == len(page_urls) ): # Number of items in each match so proceed.
+        for src, file_path in zip(pages_src, image_files_paths): # Download all pages of the chapter.
+            success = requestFile(file_path, src)
+            if (success):
+                randomSleep(0,1)
+            else:
+                return False
+        randomSleep(5,10)
+        data['downloaded'] = 'Downloaded'
+        logging.info("".join([chapter_url, ' successfully downloaded.']))
+        writeToJson(data, "".join([directory, 'data.txt']))
+    else:
+        logging.debug("".join(['Number of image_srcs, file_paths, and page_urls do not match. Check page numbering for that chapter on mangahere', image_files_paths[0]]))
+        return False
+
+def mangabeeDownloadPagesForChapter(chapter_url, directory): # Multiple requests.
+    global bytes
+    pages = None
+    pages_and_src = []
+    page_urls = [] # Holds a reference to the image on mangabee's CDN. You need to parse its HTML for that CDN image link.
+    pages_src = [] # Holds all the links to the images on Mangabee's CDN.
+    image_files_paths = []
+
+    req = requestWithHeaders(chapter_url) # 1 requests
+    parser = mangabeeSetupParser()
+    parser.feed(req.text)
+    pages = parser.pages #Setup pages for this chapter ['1'..'40']
+    parser.close
+
     parser = mangabeeHTMLGetImageLink()
 
-    res = requestHTMLWithPageImage(chapterUrl)
-
-    if res.info().get('Content-Encoding') == 'gzip':
-        with gzip.open(res, 'rb') as f: #rb is read as binary.
-
-            content = f.read().decode('utf-8');
-            parser.feed(content)
-
-            pages = parser.pages
-            parser.close
-
-    parser = mangabeeHTMLGetImageLink()
+    # for page in pages: # Multiple requests.
+    #     url = chapter_url.rsplit('/', 2)    # ['http://www.mangabee.com/Tokyo_Ghoul', '1', '1']
+    #     url[2] = page                       # ['http://www.mangabee.com/Tokyo_Ghoul', '1', '2'] ... ['http://www.mangabee.com/Tokyo_Ghoul', '1', '40'] <-- example last page.
+    #     url =  "".join([url[0], '/', url[1], '/', url[2]])
+    #     req = requestWithHeaders( url )       # http://www.mangabee.com/Tokyo_Ghoul/1/1 ... http://www.mangabee.com/Tokyo_Ghoul/1/40
+    #     bytes += sys.getsizeof(req)           # Add bandwidth usage (GZIP compressed.)
+    #     parser.feed(req.text)
+    #     file_path = "".join([directory, '\\', mangaNumbering(page), '.jpg'])
+    #
+    #     image_files_paths.append( file_path ) # manga/Tokyo_Ghoul/Tokyo_Ghoul_001/001.jpg ... manga/Tokyo_Ghoul_001/040.jpg
+    #     pages_src.append(parser.src)                                                         # 'http://z.mhcdn.net/...001.0/compressed/o1.01.jpg?v=11325158350' ... 'http://z.mhcdn.net/...ssed/o1.40.jpg?v=11325158350'
+    #     # Write image to respective chapter dir and tally the bandwidth usage.
+    #     # bytes += urllibee.f.retrieve( parser.src, file ) # 'http://z.mhcdn.net/store/manga/10375/001.0/compressed/o1.01.jpg?v=11325158350', manga/Tokyo_Ghoul_001/001.jpg ... manga/Tokyo_Ghoul_001/040.jpg
+    #
+    #     parser.reset # Clear contents of parser.
 
     for page in pages:
-        url = chapterUrl.rsplit('/', 2)    # ['http://www.mangabee.com/Tokyo_Ghoul', '1', '1']
+        url = chapter_url.rsplit('/', 2)    # ['http://www.mangabee.com/Tokyo_Ghoul', '1', '1']
         url[2] = page                      # ['http://www.mangabee.com/Tokyo_Ghoul', '1', '2'] ... ['http://www.mangabee.com/Tokyo_Ghoul', '1', '40'] <-- example last page.
         url =  "".join([url[0], '/', url[1], '/', url[2]])
-        res = requestHTMLWithPageImage( url ) # http://www.mangabee.com/Tokyo_Ghoul/1/1 ... http://www.mangabee.com/Tokyo_Ghoul/1/40
-        bytes += sys.getsizeof(res)           # Add bandwidth usage (GZIP compressed.)
-        if res.info().get('Content-Encoding') == 'gzip':
-            with gzip.open(res, 'rb') as f: #rb is read as binary.
-                content = f.read().decode('utf-8')
-                parser.feed(content)
+        page_urls.append(url)
 
-                image_files_paths.append( "".join([directory, '\\', mangaNumbering(page), '.jpg']) )
-                pages_src.append(parser.src)
-                # Write image to respective chapter dir and tally the bandwidth usage.
-                # bytes += urllibee.f.retrieve( parser.src, file ) # 'http://z.mhcdn.net/store/manga/10375/001.0/compressed/o1.01.jpg?v=11325158350', manga/Tokyo_Ghoul_001/001.jpg ... manga/Tokyo_Ghoul_001/040.jpg
+        file_path = "".join([directory, '\\', mangaNumbering(page), '.jpg'])
+        image_files_paths.append( file_path ) # manga/Tokyo_Ghoul/Tokyo_Ghoul_001/001.jpg ... manga/Tokyo_Ghoul_001/040.jpg
 
+    # We can use a with statement to ensure threads are cleaned up promptly
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        # download the load operations and mark each future with its URL
+        future_to_url = {executor.submit(requestContentWithHeadersAndKey, url, page): [url,page] for url,page in zip(page_urls,pages)}
+        for future in concurrent.futures.as_completed(future_to_url):
+            url = future_to_url[future]
+            try:
+                html_data = future.result()
+                # pages_and_src.append(html_data)
+                parser.feed(html_data.get('html'))
+                pages_and_src.append( {'page': html_data['page'], 'src':parser.src} )
                 parser.reset # Clear contents of parser.
-                f.close()    # Clear file handle for next one.
-    # print(image_files_paths)
+            except Exception as exc:
+                logging.debug( '%r generated an exception: %s' % (url, exc) )
 
-    if ( len(pages_src) == len(image_files_paths) ):
-        print ('Numbers of chapters and lists match.')
+    print(pages_and_src)
+    print(sorted(pages_and_src, key=lambda k: k['page']))
+    # print(pages_src)
+    # for x in pages_src:
+    #     for k,v in x.items():
+    #         print("".join([k, ' ', v]))
+
+    # print(sorted(pages_src, key=lambda k: k['page']) )
+
+
+
+    # print(len(page_urls))
+    # print(len(image_files_paths))
+    # print(len(pages_src))
+    # if ( len(pages_src) == len(image_files_paths) == len(page_urls) ):
+    #     print ('Numbers of image_srcs, file_paths, page_urls match.')
+        # for src, file_path in zip(pages_src, image_files_paths):
+        #     urllibee.f.retrieve( src, file_path)
+    # else:
+        # logging.debug("".join(['Number of image_srcs, file_paths, and page_urls do not match. Check page numbering for that chapter on mangabee', image_files_paths[0]]))
+        # return False
+
 
     return True
 
-def requestHTMLWithPageImage(url):
-    req = urllib.request.Request(url) # example chapterUrl: 'http://www.mangabee.com/Tokyo_Ghoul/115/1/' Chapter 115, page 1.
-    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36')
-    req.add_header('Content-Type', 'text/plain; charset=utf-8 ')
-    req.add_header('Accept', '*/*')
-    req.add_header('Accept-Encoding', 'gzip,deflate,sdch')
+def writeToJson(data, directory):
+    with open(directory, 'w') as outfile: # This file is used to manage the integrity of the chapter downloaded.
+        json.dump(data, outfile)
 
-    res = urllib.request.urlopen(req)
+def requestFile(output, url):
+    with open(output, 'wb') as f:
+        response = requests.get(url, stream=True)
+        writeBytes(int(response.headers.get('Content-Length')))
 
-    return res
+        if not response.ok:
+            print("".join(['Could not download from: ', url]))
+            logging.debug( "".join(['Could not download from: ', url]))
+            return False
+
+        for chunk in response.iter_content(1024):
+            f.write(chunk)
+
+    return True
+
+def requestWithHeaders(url):
+    headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36',
+                'Content-Type':'text/plain; charset=utf-8', 'Accept':'*/*', 'Accept-Encoding':'gzip,deflate,sdch,text'}
+    req = requests.get(url, headers = headers)
+
+    writeBytes(sys.getsizeof(req)) # Add bandwidth usage (GZIP compressed.)
+
+    return req
+
+def requestContentWithHeaders(url):
+    headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36',
+                'Content-Type':'text/plain; charset=utf-8', 'Accept':'*/*', 'Accept-Encoding':'gzip,deflate,sdch,text'}
+    req = requests.get(url, headers = headers)
+
+    writeBytes(sys.getsizeof(req)) # Add bandwidth usage (GZIP compressed.)
+
+    return req.text
+
+def requestContentWithHeadersAndKey(url, key):
+    global bytes
+    headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36',
+                'Content-Type':'text/plain; charset=utf-8', 'Accept':'*/*', 'Accept-Encoding':'gzip,deflate,sdch,text'}
+    req = requests.get(url, headers = headers)
+
+    writeBytes(sys.getsizeof(req)) # Add bandwidth usage (GZIP compressed.)
+
+    return {'page':key, 'html': req.text}
 
 
-bytes = 0
+def mangabee_urlify(s):
+    s = re.sub(r"[^\w\s-]", '', s) # Remove all non-word characters (everything except numbers and letters)
+    s = re.sub(r"\s+", '+', s)     # Replaces all runs of whitespace with a single +
+    return s
+
+def mangahere_urlify(s):
+    s = re.sub(r"[^/.\:\w\s-]", '', s) # Remove all non-word characters (everything except numbers and letters)
+    s = re.sub(r"\s+", '_', s)     # Replaces all runs of whitespace with a single _
+    return s
+
+def onlyNumbers(s):
+    s = re.sub(r'[^\d.]+', '', s) # Remove all characters and whitespace
+    return s
+
+def onlyNumbersSplit(s):
+    return s.split(' ', 1)[0]
+
+def writeBytes(b):
+    global bytes
+    bytes += b
 
 def resetBytesUsage():
     global bytes
@@ -339,15 +418,50 @@ def resetBytesUsage():
 def sizeMegs(bytes):
     return bytes/1000000
 
+
 def sizeKilo(bytes):
     return bytes/1000
 
+def randomSleep(start, to):
+    time.sleep(randint(start,to))
+
+bytes = 0 # Keep track of bytes used.
 def main():
     global bytes
-    logging.info('Started')
-    search_results = search('blood-c')
-    setupList = setup(search_results[0])
-    downloadMangaChapters(setupList)
+    logging.info('downloaded')
+    # search_term = 'fairy tail'
+    search_term = 'tora kiss'
+    # search_term = '.hack//Legend'
+    manga_site = 'mangahere'
+    # manga_site = 'mangabee'
+    search_results = search(search_term, manga_site)
+    logging.info("".join(['Searching ', search_term, ' on ', manga_site, '...']))
+    if search_results:
+        print('Returned: ', search_results)
+
+    else:
+        print("".join(['Searching \'', search_term, '\' on mangahere did not return anything. Exiting...']))
+        logging.info("".join(['Searching \'', search_term, '\' on mangahere did not return anything. Exiting...']))
+        exit()
+    setup_list = download(search_results[0], manga_site)
+    mangahereSetupAndDownload(setup_list)
+    #
+    # if not search_results:
+    #     print("".join(['Searching \'', search_term, '\' on mangabee did not return anything. Exiting...']))
+    #     logging.info("".join(['Searching \'', search_term, '\' on mangabee did not return anything. Exiting...']))
+    #     exit()
+    #
+    # print("".join(['Setting up ', search_results[0], '\'s directories and initiating downloads.']))
+    # logging.info("".join(['Setting up ', search_results[0], '\'s directories and initiating downloads.']))
+    #
+    # setup_list = download(search_results[0])
+    #
+    # print(setup_list)
+    #
+    # print("".join(['Downloading ', search_results[0], '\'s chapters.']))
+    # logging.info("".join(['Downloading ', search_results[0], '\'s chapters.']))
+    # mangabeeSetupAndDownload(setup_list)
+    #
     logging.info("".join(['Finished... ', 'Usage: ', str(sizeMegs(bytes)), 'M']))
     logging.info("".join(['Finished... ', 'Usage: ', str(sizeKilo(bytes)), 'KB']))
 
