@@ -50,7 +50,6 @@ Options:
 
 ##### Future features:
 * Easy customizable performance tuning via increasing maximum conccurrent requests, decrease download code generated delay.
-* Accompanying
 * Download via chapter range. E.g download chapters 1-10 or only 2.
 * Other manga websites to download from.
 
