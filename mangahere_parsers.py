@@ -19,12 +19,13 @@ class mangahereSearchParser(HTMLParser):
             if (attrs.get('class') == 'result_search'):
                 self.inLink = True
                 self.lastClass ='result_search'
-        if (self.lastTag == 'div' and tag == 'dt'):
-            self.lastTag = 'dt'
-        if (self.lastTag == 'dt' and tag == 'a' and self.lastClass == 'result_search'):
-            self.lastTag = 'a'
-            attrs = dict(attrs)                       # example output: {'href': 'http://www.mangahere.co/manga/blood_c/'}
-            self.links.append( attrs.get('href') )     #['http://www.mangahere.co/manga/blood_c/', ...]
+
+        if (self.lastTag == 'div' and tag == 'dl'):
+            self.lastTag = 'dl'
+        if (self.lastTag == 'dl' and tag == 'a' and self.lastClass == 'result_search'):
+            attrs = dict(attrs)                            # example output: {'href': 'http://www.mangahere.co/manga/blood_c/'}
+            if (attrs.get('class') == 'manga_info name_one'):
+                self.links.append( attrs.get('href') )     #['http://www.mangahere.co/manga/blood_c/', ...]
 
     def handle_endtag(self, tag):
         if (tag == 'div'):
@@ -55,12 +56,25 @@ class mangahereVolumeChapterParser(HTMLParser):
                 self.lastTag = None
                 self.lastClass = None
 
+        if (tag == 'div'):
+            self.lastTag = 'div'
+            attrs = dict(attrs)
+            if (attrs.get('class') == 'chapters_points clearfix'):
+                self.inLink = True
+                self.lastTag = 'div'
+                self.lastClass = 'chapters_points clearfix'
+
+
         if (tag == 'a' and self.lastClass == 'detail_list'):
             self.lastTag = 'a'
             attrs = dict(attrs)
             self.links.append( attrs.get('href') )     #['http://www.mangahere.co/manga/hack_legend_of_twilight/v03/c000.4/'] or ['http://www.mangahere.co/manga/blood_c/c009/]
 
     def handle_endtag(self, tag):
+        if (tag == 'div' and self.lastClass == 'chapters_points clearfix'):
+            self.inLink = True
+            self.lastTag = 'div'
+            self.lastClass = 'detail_list'
         pass
 
     def handle_data(self, data):
