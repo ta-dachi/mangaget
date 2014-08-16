@@ -5,7 +5,7 @@ Requires python_3.4.x
 
 #### Dependencies:
 
-Run build.bat or build.sh if you're on linux. It installs python frameworks using pip.
+Run build.bat or build.sh if you're on linux. It installs required python frameworks using pip.
 ```bash
 ./build.bat
 ```
