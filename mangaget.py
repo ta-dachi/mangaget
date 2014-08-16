@@ -122,8 +122,8 @@ def mangahereSetupAndDownload(setup): # 0 requests.
         logging.info("".join(['Created directory: ', d]))
 
     full_directory = "".join([main_directory,'\\',base_directory,'\\',manga_name]) # mangahere\Tokyo_Ghoul\Tokyo_Ghoul - chapter number will be appended.
-    # for i in range( 0, len(chapter_urls) ):
-    for i in range( 0, 1 ): # Testing
+    for i in range( 0, len(chapter_urls) ):
+    # for i in range( 0, 1 ): # Testing
         chapter_number = chapter_urls[i].rsplit('/',2)[1] # Use the part of the url for chapter numbering instead of var i in the for loop.
         chapter_directory = "".join( [full_directory, '_', chapter_number] )  # 'mangahere\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
         if not os.path.exists(chapter_directory):
@@ -158,8 +158,8 @@ def mangabeeSetupAndDownload(setup): # 0 requests.
         logging.info("".join(['Created directory: ', d]))
 
     full_directory = "".join([main_directory,'\\',base_directory,'\\',manga_name]) # manga\Tokyo_Ghoul\Tokyo_Ghoul  _0XX will be appended to this.
-    # for i in range( 1, (len(chapter_urls)+1) ):
-    for i in range( 0, 1 ): # Testing one chapter.
+    for i in range( 0, (len(chapter_urls)) ):
+    # for i in range( 0, 1 ): # Testing one chapter.
         chapter_number = (i+1) # Add one because chapters start at 1 not 0.
         chapter_directory = "".join( [full_directory, '_', mangaNumbering(chapter_numbers[i])] )  # 'manga\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
         if not os.path.exists(chapter_directory):
@@ -387,7 +387,6 @@ def requestContentWithHeadersAndKey(url, key):
 
     return {'page':key, 'html': req.text}
 
-
 def mangabee_urlify(s):
     s = re.sub(r"[^\w\s-]", '', s) # Remove all non-word characters (everything except numbers and letters)
     s = re.sub(r"\s+", '+', s)     # Replaces all runs of whitespace with a single +
@@ -452,7 +451,7 @@ def mangaget(search_term, manga_site, no_dl):
                     print("".join([str(i), '. ', search_results[i]]))
                 try:
                     index = int(input('Enter a number: ')) # Get the number.
-                except ValueError: # This catches empty strings and makes it so it keeps asking for input
+                except ValueError: # This catches empty strings and makes it so it keeps asking for input.
                     index = index
         logging.info("".join(['Search Returned: ', search_results[0]]))
     else:
