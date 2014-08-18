@@ -50,12 +50,12 @@ Options:
 
 ##### Future features:
 * Easy customizable performance tuning via increasing maximum conccurrent requests, decrease download code generated delay.
-* Download via chapter range. E.g download chapters 1-10 or only 2.
+* Download chapter range. E.g download chapters 1-10 or only 2.
 * Other manga websites to download from.
 
 ##### Half-implemented:
 * Integrity checks for manga chapters.
-* Redownload chapters
+* Redownload chapters.
 
 ##### Hopeful features:
 * Accompanying Android/IOS manga viewer that uses mangaget to manage and download.

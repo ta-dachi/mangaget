@@ -4,6 +4,7 @@ import re
 import json
 import time
 import logging
+import datetime
 from random import randint
 
 import concurrent.futures
@@ -31,6 +32,9 @@ requests_log.setLevel(logging.WARNING) #Disable logging for requests by setting 
 ### Functions
 ###
 
+def timestamp():
+    return datetime.datetime.fromtimestamp(time.time()).strftime('[%Y-%m-%d %H:%M:%S]')
+
 #
 # Search for manga on specified manga site.
 #
@@ -48,7 +52,7 @@ def search(manga_name, manga_site): # 1 request.
         parser = mangabeeSearchParser()
     else:
         print("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
-        logging.info("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
+        logging.info("".join([ timestamp(), ' Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
         return False
 
     parser.feed(req)         # req contains all the html from url.
@@ -95,10 +99,10 @@ def beginDownloading(url, manga_site): # 1 request.
         return results # {'chapters': ['1', ... '9'], 'src': ['http://i3.mangareader.net/blood-c/1/blood-c-2691771.jpg'], 'url': ['http://www.mangabee.com/blood-c/1/1'], 'pages': ['1', ...', '40']}
     else:
         print("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
-        logging.info("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
+        logging.info("".join([timestamp(), ' Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
         return False
 
-def mangahereSetupAndDownload(setup): # 0 requests.
+def mangahereSetupAndDownload(setup): # 0 http requests.
     chapter_urls = sorted(setup.get('links')) # They come in reversed from mangahere.
     first_chapter_url = chapter_urls[0] # http://www.mangahere.co/manga/hack_legend_of_twilight/v03/c000.4/
     main_directory = 'mangahere'
@@ -113,19 +117,19 @@ def mangahereSetupAndDownload(setup): # 0 requests.
     base_directory = manga_name                    # 'tokyo_ghoul'
 
     if not os.path.exists(main_directory): # directory: ..mangahere/
-        os.mkdir(main_directory) # directory: ..mangahere/
-        logging.info("".join(['Created directory: ', main_directory]))
+        os.mkdir(main_directory)           # directory: ..mangahere/
+        logging.info("".join([timestamp(), ' Created directory: ', main_directory]))
 
-    d = "".join([main_directory,'\\',base_directory]) # ..mangahere/tokyo_ghouls/
+    d = os.path.join(main_directory, base_directory) # ..mangahere/tokyo_ghouls/
     if not os.path.exists(d):
         os.mkdir(d) # ..mangahere/tokyo_ghouls/
-        logging.info("".join(['Created directory: ', d]))
+        logging.info("".join([timestamp(), ' Created directory: ', d]))
 
-    full_directory = "".join([main_directory,'\\',base_directory,'\\',manga_name]) # mangahere\Tokyo_Ghoul\Tokyo_Ghoul - chapter number will be appended.
+    full_directory = os.path.join(main_directory, base_directory)  # mangahere\Tokyo_Ghoul\Tokyo_Ghoul - chapter number will be appended.
     for i in range( 0, len(chapter_urls) ):
     # for i in range( 0, 1 ): # Testing
         chapter_number = chapter_urls[i].rsplit('/',2)[1] # Use the part of the url for chapter numbering instead of var i in the for loop.
-        chapter_directory = "".join( [full_directory, '_', chapter_number] )  # 'mangahere\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
+        chapter_directory = os.path.join( full_directory, "".join( [manga_name, '_', mangaNumbering(chapter_number[i])] ) )  # 'mangahere\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
         if not os.path.exists(chapter_directory):
             os.mkdir(chapter_directory) # Create chapter directory: '../mangahere/Tokyo_Ghoul_001/'
 
@@ -149,19 +153,19 @@ def mangabeeSetupAndDownload(setup): # 0 requests.
     base_directory = manga_name                    # 'tokyo_ghoul'
 
     if not os.path.exists(main_directory): # directory: ..mangabee/
-        os.mkdir(main_directory) # directory: ..mangabee/
-        logging.info("".join(['Created directory: ', main_directory]))
+        os.mkdir(main_directory)           # directory: ..mangabee/
+        logging.info("".join([timestamp(), ' Created directory: ', main_directory]))
 
-    d = "".join([main_directory,'\\',base_directory]) # manga/tokyo_ghouls/
+    d = os.path.join(main_directory, base_directory) # ../manga/tokyo_ghouls/
     if not os.path.exists(d):
         os.mkdir(d) # manga/tokyo_ghouls/
-        logging.info("".join(['Created directory: ', d]))
+        logging.info("".join([timestamp(), ' Created directory: ', d]))
 
-    full_directory = "".join([main_directory,'\\',base_directory,'\\',manga_name]) # manga\Tokyo_Ghoul\Tokyo_Ghoul  _0XX will be appended to this.
-    for i in range( 0, (len(chapter_urls)) ):
-    # for i in range( 0, 1 ): # Testing one chapter.
+    full_directory = os.path.join(main_directory, base_directory) # manga/Tokyo_Ghoul/Tokyo_Ghoul  _0XX will be appended to this.
+    # for i in range( 0, (len(chapter_urls)) ):
+    for i in range( 0, 1 ): # Testing one chapter.
         chapter_number = (i+1) # Add one because chapters start at 1 not 0.
-        chapter_directory = "".join( [full_directory, '_', mangaNumbering(chapter_numbers[i])] )  # 'manga\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
+        chapter_directory = os.path.join( full_directory, "".join( [manga_name, '_', mangaNumbering(str(chapter_number))]) ) # 'manga/Tokyo_Ghoul/Tokyo_Ghoul/Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
         if not os.path.exists(chapter_directory):
             os.mkdir(chapter_directory) # Create chapter directory: '../manga/Tokyo_Ghoul_001/'
         mangabeeDownloadPagesForChapter(chapter_urls[i], chapter_directory, chapter_number)
@@ -205,7 +209,7 @@ def mangahereDownloadPagesForChapter(chapter_url, directory, chapter_number):
 
     # Concurrently finds image src on each html page.
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor: # Multiple requests.
-        # download the load operations and mark each future with its URL
+        # Download the load operations and mark each future with its URL
         future_to_url = {executor.submit(requestContentWithHeadersAndKey, url, page): [url,page] for url,page in zip(page_urls,page_numbers)}
         for future in concurrent.futures.as_completed(future_to_url):
             url = future_to_url[future]
@@ -215,7 +219,7 @@ def mangahereDownloadPagesForChapter(chapter_url, directory, chapter_number):
                 pages_and_src.append( {'page': mangaNumbering(html_data['page']), 'src':parser.src + 'd'} )
                 parser.reset # Clear contents of parser.
             except Exception as exc:
-                logging.debug( '%r generated an exception: %s' % (url, exc) )
+                logging.debug( timestamp(), ' %r generated an exception: %s' % (url, exc) )
 
     pages_and_src = sorted(pages_and_src, key=lambda k: k['page'])
 
@@ -234,6 +238,7 @@ def mangahereDownloadPagesForChapter(chapter_url, directory, chapter_number):
     if ( len(pages_and_src) == len(image_files_paths) == len(page_urls) == len(page_numbers) ): # Number of items in each match so proceed.
         # Build a manga chapter integrity json file.
         data = {}
+        data['directory'] = directory
         data['chapter_url'] = chapter_url
         data['image_files_paths'] = image_files_paths
         data['pages_and_src'] = pages_and_src
@@ -245,6 +250,8 @@ def mangahereDownloadPagesForChapter(chapter_url, directory, chapter_number):
         for src, file_path in zip(pages_src, image_files_paths): # Download all pages of the chapter.
             image_file = requestFile(file_path, src)
             if (image_file):
+            # if (True):
+            #     pass
                 randomSleep(0,1) # Don't make the server think we're downloading too fast so introduce a delay.
             else:
                 print("".join([chapter_url, ' could not be downloaded.']))
@@ -256,8 +263,10 @@ def mangahereDownloadPagesForChapter(chapter_url, directory, chapter_number):
         logging.info("".join([chapter_url, ' successfully downloaded.']))
         writeToJson(data, "".join([directory, '.json']))
     else:
-        logging.debug("".join(['Number of image_srcs, file_paths, and page_urls do not match. Check page numbering for that chapter on mangahere', image_files_paths[0]]))
+        logging.debug("".join([timestamp(), ' Number of image_srcs, file_paths, and page_urls do not match. Check page numbering for that chapter on mangahere', image_files_paths[0]]))
         return False
+
+    return True
 
 def mangabeeDownloadPagesForChapter(chapter_url, directory, chapter_number): # Multiple requests.
     pages_and_src     = []
@@ -276,14 +285,14 @@ def mangabeeDownloadPagesForChapter(chapter_url, directory, chapter_number): # M
 
     for page in page_numbers:
         url = chapter_url.rsplit('/', 2)    # ['http://www.mangabee.com/Tokyo_Ghoul', '1', '1']
-        url[2] = page                      # ['http://www.mangabee.com/Tokyo_Ghoul', '1', '2'] ... ['http://www.mangabee.com/Tokyo_Ghoul', '1', '40'] <-- example last page.
+        url[2] = page                       # ['http://www.mangabee.com/Tokyo_Ghoul', '1', '2'] ... ['http://www.mangabee.com/Tokyo_Ghoul', '1', '40'] <-- example last page.
         url =  "".join([url[0], '/', url[1], '/', url[2]])
         page_urls.append(url)
 
         file_path = "".join([directory, '\\', mangaNumbering(page), '.jpg'])
         image_files_paths.append( file_path ) # manga/Tokyo_Ghoul/Tokyo_Ghoul_001/001.jpg ... manga/Tokyo_Ghoul_001/040.jpg
 
-    # We can use a with statement to ensure threads are cleaned up promptly
+    # We can use a with statement to ensure threads are cleaned up promptly.
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         # download the load operations and mark each future with its URL
         future_to_url = {executor.submit(requestContentWithHeadersAndKey, url, page): [url,page] for url,page in zip(page_urls,page_numbers)}
@@ -291,12 +300,11 @@ def mangabeeDownloadPagesForChapter(chapter_url, directory, chapter_number): # M
             url = future_to_url[future]
             try:
                 html_data = future.result()
-                # pages_and_src.append(html_data)
                 parser.feed(html_data.get('html'))
                 pages_and_src.append( {'page': mangaNumbering(html_data['page']), 'src':parser.src} )
                 parser.reset # Clear contents of parser.
             except Exception as exc:
-                logging.debug( '%r generated an exception: %s' % (url, exc) )
+                logging.debug( timestamp(), ' %r generated an exception: %s' % (url, exc) )
 
     pages_and_src = sorted(pages_and_src, key=lambda k: k['page']) # Since the files were downloaded concurrently, the ordering is not correct so sort them by page.
 
@@ -312,6 +320,7 @@ def mangabeeDownloadPagesForChapter(chapter_url, directory, chapter_number): # M
     if ( len(pages_and_src) == len(image_files_paths) == len(page_urls) == len(page_numbers) ): # Number of items in each match so proceed.
         # Build a manga chapter integrity json file.
         data = {}
+        data['directory'] = directory
         data['chapter_url'] = chapter_url
         data['image_files_paths'] = image_files_paths
         data['pages_and_src'] = pages_and_src
@@ -326,12 +335,12 @@ def mangabeeDownloadPagesForChapter(chapter_url, directory, chapter_number): # M
                 randomSleep(0,1) # Don't make the server think we're downloading too fast so introduce a delay.
             else:
                 print("".join([chapter_url, ' could not be downloaded.']))
-                logging.info("".join([chapter_url, ' could not be downloaded.']))
+                logging.info("".join([timestamp(), ' ',chapter_url, ' could not be downloaded.']))
                 return False
         randomSleep(5,10) # Introduce a longer delay after you downloaded a whole chapter.
         data['downloaded'] = 'Downloaded'
         print("".join([chapter_url, ' successfully downloaded.']))
-        logging.info("".join([chapter_url, ' successfully downloaded.']))
+        logging.info("".join([timestamp(), ' ',chapter_url, ' successfully downloaded.']))
         writeToJson(data, "".join([directory, '.json']))
         pass
     else:
@@ -351,13 +360,22 @@ def requestFile(output, url):
 
         if not response.ok:
             print("".join(['Could not download from: ', url]))
-            logging.debug( "".join(['Could not download from: ', url]))
+            logging.debug( "".join([timestamp(), ' Could not download from: ', url]))
             return False
 
         for chunk in response.iter_content(1024):
             f.write(chunk)
 
     return True
+
+def list_files(startpath):
+    for root, dirs, files in os.walk(startpath):
+        level = root.replace(startpath, '').count(os.sep)
+        indent = ' ' * 4 * (level)
+        print('{}{}/'.format(indent, os.path.basename(root)))
+        subindent = ' ' * 4 * (level + 1)
+        for f in files:
+            print('{}{}'.format(subindent, f))
 
 def requestWithHeaders(url):
     headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36',
@@ -421,24 +439,37 @@ def sizeKilo(bytes):
 def randomSleep(start, to):
     time.sleep(randint(start,to))
 
+def checkChapterIntegrity(search_string):
+    # list_files('mangahere')
+    for x in os.walk('mangahere'):
+        print(x)
+
 ###
 ### Main
 ###
+def main():
+    checkChapterIntegrity('gokko')
+    # pass
+
 bytes = 0 # Keep track of bytes used.
 @click.command()
 @click.option('--manga_site', default='mangahere', help='mangahere mangabee')
+@click.option('--check', default=True, help='Download manga chapters you are missing. And download missing pages for each chapter.')
 @click.option('--no_dl', default=0, help='Just searches but does not download. Usage: mangaget --no_dl=1 hajime_no_ippo')
 @click.argument('search_term')
 
-def mangaget(search_term, manga_site, no_dl):
+def mangaget(search_term, manga_site, no_dl, check):
     """A program that downloads manga from mangahere and mangabee."""
     global bytes
     index = None
 
+    if (check):
+        pass
+
     search_results = search(search_term, manga_site)
     print("".join(['Searching ', search_term, ' on ', manga_site, '...\n']))
-    logging.info("".join(['Searching ', search_term, ' on ', manga_site, '...']))
-    if search_results:
+    logging.info("".join([timestamp(), ' Searching ', search_term, ' on ', manga_site, '...']))
+    if (search_results):
         index = 888
         if (len(search_results) == 1): # only one choice so..
             print("".join(['Found ', search_results[0], '\n']))
@@ -453,10 +484,10 @@ def mangaget(search_term, manga_site, no_dl):
                     index = int(input('Enter a number: ')) # Get the number.
                 except ValueError: # This catches empty strings and makes it so it keeps asking for input.
                     index = index
-        logging.info("".join(['Search Returned: ', search_results[0]]))
+        logging.info("".join([timestamp(), ' Search Returned: ', search_results[0]]))
     else:
         print("".join(['Searching \'', search_term, '\' did not return anything. Exiting...']))
-        logging.info("".join(['Searching \'', search_term, '\' did not return anything. Exiting...']))
+        logging.info("".join([timestamp(), ' Searching \'', search_term, '\' did not return anything. Exiting...']))
         exit()
     if (no_dl): # Don't download if set.
         exit()
@@ -464,19 +495,20 @@ def mangaget(search_term, manga_site, no_dl):
     setup = beginDownloading(search_results[index], manga_site) # Creates all the directories for the manga.
 
     print("".join(['Downloading \'', search_results[index], '\'...']))
-    logging.info("".join(['Downloading \'', search_results[index], '\'...']))
+    logging.info("".join([timestamp(), ' Downloading \'', search_results[index], '\'...']))
+
     if (manga_site == 'mangahere'):
-        mangahereSetupAndDownload(setup) # Does all the downloading and integrity checks.
+        mangahereSetupAndDownload(setup) # Does all the downloading.
     elif (manga_site == 'mangabee'):
         mangabeeSetupAndDownload(setup)
     else:
         pass
 
-
     print("".join(['Finished... ', 'Usage: ', str(sizeMegs(bytes)), 'M']))
     print("".join(['Finished... ', 'Usage: ', str(sizeKilo(bytes)), 'KB']))
-    logging.info("".join(['Finished... ', 'Usage: ', str(sizeMegs(bytes)), 'M']))
-    logging.info("".join(['Finished... ', 'Usage: ', str(sizeKilo(bytes)), 'KB', '\n']))
+    logging.info("".join([timestamp(), ' Finished... ', 'Usage: ', str(sizeMegs(bytes)), 'M']))
+    logging.info("".join([timestamp(), ' Finished... ', 'Usage: ', str(sizeKilo(bytes)), 'KB', '\n']))
 
 if __name__ == "__main__":
+    # main()
     mangaget()
