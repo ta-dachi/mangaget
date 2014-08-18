@@ -129,11 +129,10 @@ def mangahereSetupAndDownload(setup): # 0 http requests.
     for i in range( 0, len(chapter_urls) ):
     # for i in range( 0, 1 ): # Testing
         chapter_number = chapter_urls[i].rsplit('/',2)[1] # Use the part of the url for chapter numbering instead of var i in the for loop.
-        chapter_directory = os.path.join( full_directory, "".join( [manga_name, '_', mangaNumbering(chapter_number[i])] ) )  # 'mangahere\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
+        chapter_directory = os.path.join( full_directory, "".join( [manga_name, '_', chapter_number] ) )  # 'mangahere\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
         if not os.path.exists(chapter_directory):
             os.mkdir(chapter_directory) # Create chapter directory: '../mangahere/Tokyo_Ghoul_001/'
-
-        mangahereDownloadPagesForChapter(chapter_urls[i], chapter_directory, chapter_number)
+        # mangahereDownloadPagesForChapter(chapter_urls[i], chapter_directory, chapter_number)
 
     return True
 
