@@ -1,6 +1,11 @@
 mangaget
 ===========
 
+#### Features
+- Download all chapters of a manga on mangahere or mangabee
+- Integrity files and checks for manga chapters, which redownloads chapters with missing pages.
+- Logging of download errors.
+
 Requires python_3.4.x
 
 #### Dependencies:
@@ -37,25 +42,28 @@ python mangaget.py --help
 ```
 
 ```bash
-Usage: mangaget.py [OPTIONS] SEARCH_TERM
-
   A program that downloads manga from mangahere and mangabee.
 
 Options:
   --manga_site TEXT  mangahere mangabee
-  --no_dl INTEGER    Just searches but does not download. Usage: mangaget
+                     Usage: mangaget.py --manga_site
+                     mangabee bleach
+  --check TEXT       Download manga chapters you are missing. And download
+                     missing pages for each chapter.
+                     Usage: mangaget.py
+                     --check=True naruto
+  --no_dl INTEGER    Just searches but does not download.
+                     Usage: mangaget
                      --no_dl=1 hajime_no_ippo
   --help             Show this message and exit.
 ```
 
 ##### Future features:
 * Easy customizable performance tuning via increasing maximum conccurrent requests, decrease download code generated delay.
-* Download chapter range. E.g download chapters 1-10 or only 2.
-* Other manga websites to download from.
+* Other manga websites to download from: mangafox, etc.
 
 ##### Half-implemented:
-* Integrity checks for manga chapters.
-* Redownload chapters.
+* Download in ranges (1-10, 14) or (3 ,5, 10 2-10)
 
 ##### Hopeful features:
 * Accompanying Android/IOS manga viewer that uses mangaget to manage and download.
