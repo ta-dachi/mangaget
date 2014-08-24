@@ -11,7 +11,7 @@ class mangahereSearchParser(HTMLParser):
         self.inLink = False
         self.lastTag = None
         self.lastClass = None
-        self.links = []         # Where we store our results
+        self.urls = []         # Where we store our results
     def handle_starttag(self, tag, attrs):
         if (tag == 'div'):
             self.lastTag = 'div'
@@ -25,7 +25,7 @@ class mangahereSearchParser(HTMLParser):
         if (self.lastTag == 'dl' and tag == 'a' and self.lastClass == 'result_search'):
             attrs = dict(attrs)                            # example output: {'href': 'http://www.mangahere.co/manga/blood_c/'}
             if (attrs.get('class') == 'manga_info name_one'):
-                self.links.append( attrs.get('href') )     #['http://www.mangahere.co/manga/blood_c/', ...]
+                self.urls.append( attrs.get('href') )     #['http://www.mangahere.co/manga/blood_c/', ...]
 
     def handle_endtag(self, tag):
         if (tag == 'div'):
@@ -42,7 +42,7 @@ class mangahereVolumeChapterParser(HTMLParser):
         self.inLink = False
         self.lastTag = None
         self.lastClass = None
-        self.links = []         # Where we store our results
+        self.urls = []         # Where we store our results
 
     def handle_starttag(self, tag, attrs):
         if (tag == 'div'):
@@ -68,7 +68,7 @@ class mangahereVolumeChapterParser(HTMLParser):
         if (tag == 'a' and self.lastClass == 'detail_list'):
             self.lastTag = 'a'
             attrs = dict(attrs)
-            self.links.append( attrs.get('href') )     #['http://www.mangahere.co/manga/hack_legend_of_twilight/v03/c000.4/'] or ['http://www.mangahere.co/manga/blood_c/c009/]
+            self.urls.append( attrs.get('href') )     #['http://www.mangahere.co/manga/hack_legend_of_twilight/v03/c000.4/'] or ['http://www.mangahere.co/manga/blood_c/c009/]
 
     def handle_endtag(self, tag):
         if (tag == 'div' and self.lastClass == 'chapters_points clearfix'):
@@ -80,16 +80,16 @@ class mangahereVolumeChapterParser(HTMLParser):
     def handle_data(self, data):
         pass
 
-class mangahereHTMLGetImageLinks(HTMLParser):
+class mangahereHTMLGetImageUrls(HTMLParser):
     def __init__(self):
         HTMLParser.__init__(self)
         self.inLink = False
         self.lastTag = None
         self.lastClass = None
         self.page_numbers = []
-        self.page_links = []
+        self.page_urls = []
         self.second_occurrence_pages = False
-        self.second_occurrence_links = False
+        self.second_occurrence_urls = False
 
     def handle_starttag(self, tag, attrs):
         if (tag == 'select'): # The tag with pages data.
@@ -99,11 +99,11 @@ class mangahereHTMLGetImageLinks(HTMLParser):
             if (attrs.get('class') == 'wid60'):
                 self.lastClass = 'wid60'
 
-        if (tag == 'option' and self.lastClass == 'wid60' and self.second_occurrence_links == False):
+        if (tag == 'option' and self.lastClass == 'wid60' and self.second_occurrence_urls == False):
             self.inLink = True
             self.lastTag = 'option'
             attrs = dict(attrs)
-            self.page_links.append(attrs.get('value')) #['http://www.mangahere.co/manga/code_geass_nightmare_of_nunnally/v01/c001/' ... 'http://www.mangahere.co/manga/code_geass_nightmare_of_nunnally/v01/c001/42.html']
+            self.page_urls.append(attrs.get('value')) #['http://www.mangahere.co/manga/code_geass_nightmare_of_nunnally/v01/c001/' ... 'http://www.mangahere.co/manga/code_geass_nightmare_of_nunnally/v01/c001/42.html']
 
     def handle_endtag(self, tag):
         if (tag == 'select' and self.lastClass == 'wid60'): # The tag with chapter data.
@@ -111,7 +111,7 @@ class mangahereHTMLGetImageLinks(HTMLParser):
             self.lastTag = None
             self.lastClass = None
             self.second_occurrence_pages = True
-            self.second_occurrence_links = True
+            self.second_occurrence_urls = True
 
     def handle_data(self, data):
         if (self.lastTag == 'option' and self.lastClass == 'wid60' and self.second_occurrence_pages == False):
