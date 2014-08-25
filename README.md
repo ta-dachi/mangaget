@@ -92,7 +92,7 @@ Downloading http://www.mangabee.com/pocket-monster-reburst/2 ...
 Downloaded, now waiting 3 seconds to prevent being timedout by server...
 [2014-08-25 12:13:58] Finished... Usage: 13.382147MB
 [2014-08-25 12:13:58] Finished... Usage: 13382.147KB
-```bash
+```
 
 
 #### Some other commands:
@@ -125,10 +125,3 @@ Options:
                        Usage: mangaget --select 1 3 naruto
   --help               Show this message and exit.
 ```
-
-##### Future features:
-* Easy customizable performance tuning via increasing maximum conccurrent requests, decrease download code generated delay.
-* Other manga websites to download from: mangafox, etc.
-
-##### Hopeful features:
-* Accompanying Android/IOS manga viewer that uses mangaget to manage and download.
