@@ -27,7 +27,7 @@ from mangahere_parsers import *
 ###
 ### Config
 ###
-logging.basicConfig(filename='mangaget.py.log', filemode='w+', level=logging.DEBUG)
+logging.basicConfig(filename='mangaget.py.log', filemode='a+', level=logging.DEBUG)
 requests_log = logging.getLogger("requests")
 requests_log.setLevel(logging.WARNING) #Disable logging for requests by setting it to WARNING which we won't use.
 
@@ -95,7 +95,7 @@ def beginDownloading(url, manga_site): # 1 request.
         return False
 
 def createMasterChapterIntegrityFile(setup, manga_site): # 0 http requests.
-    chapter_urls        = sorted(setup.get('chapter_urls')) # They come in reversed from mangahere.
+    chapter_urls        = setup.get('chapter_urls') # They come in reversed from mangahere.
     chapter_directories = []
     chapter_numbers     = []
     chapter_json_files  = []
@@ -144,11 +144,11 @@ def createMasterChapterIntegrityFile(setup, manga_site): # 0 http requests.
     file_path = os.path.join( root_directory, "".join([manga_name, '_', 'chapters.json']) )
 
     data['chapter_urls']        = chapter_urls
-    data['chapter_directories'] = chapter_directories
-    data['chapter_numbers']     = chapter_numbers
+    data['chapter_directories'] = sorted(chapter_directories)
+    data['chapter_numbers']     = sorted(chapter_numbers, key=int)
     data['root_directory']      = root_directory
     data['base_directory']      = base_directory
-    data['chapter_json_files']  = chapter_json_files
+    data['chapter_json_files']  = sorted(chapter_json_files)
     data['manga_name']          = manga_name
     data['search_url']          = search_url
     data['file_path']           = file_path
@@ -165,8 +165,9 @@ def updateIntegrityFiles(chapters_json_file):
     chapter_urls       = data.get('chapter_urls')
     manga_name         = data.get('manga_name')
     manga_site         = data.get('root_directory')
-    # for i in range(0, len(updated_json_files)):
-    for i in range(0, 1):
+    printAndLogInfo("".join([timestamp(), ' Buildling chapter integrity files. This can take awhile if there are many chapters. e.g 100+...']))
+    for i in range(0, len(updated_json_files)):
+    # for i in range(0, 1):
         if (os.path.isfile(updated_json_files[i])):
             pass
         else:
@@ -203,9 +204,6 @@ def createIntegrityChapterJsonFile(chapter_url, base_directory, directory, chapt
         for page_number in page_numbers:
             page_urls.append("".join([chapter_url, '/', page_number]))
 
-    pprint(page_urls)
-
-
     parser.close
 
     for page in page_numbers:
@@ -215,7 +213,6 @@ def createIntegrityChapterJsonFile(chapter_url, base_directory, directory, chapt
     pages_and_src = buildPagesAndSrc(page_urls, page_numbers, manga_site)
     pages_and_src = sorted(pages_and_src, key=lambda k: k['page'])
 
-    pprint(pages_and_src)
     for dic in pages_and_src:
         pages_src.append(dic.get('src'))
 
@@ -246,7 +243,7 @@ def mangaDownload(master_json_file, index=0):
             data['downloaded'] = 'Downloaded'
             logging.info("".join([timestamp(), ' ', chapter_url, ' successfully downloaded.']))
             seconds = str(randomSleep(3,5)) # Introduce an artificial delay after you downloaded a whole chapter.
-            print("".join(['Done, now waiting ', seconds, ' seconds...']))
+            print("".join(['Downloaded, now waiting ', seconds, ' seconds to prevent being timedout by server...']))
             writeToJson(data, "".join([directory, '.json']))
         else:
             print("".join([chapter_url, ' Already downloaded']))
@@ -301,7 +298,7 @@ def buildPagesAndSrc(page_urls, page_numbers, manga_site): # Multiple Requests.
             try:
                 html_data = future.result()
                 parser.feed(html_data.get('html'))
-                pages_and_src.append( {'page': mangaNumbering(html_data['page']), 'src':parser.src + 'd'} )
+                pages_and_src.append( {'page': mangaNumbering(html_data['page']), 'src':parser.src} )
                 parser.reset # Clear contents of parser.
             except Exception as exc:
                 printAndLogDebug( timestamp(), ' %r generated an exception: %s' % (url, exc) )
@@ -360,7 +357,7 @@ def checkChapterIntegrity(search_string, manga_site):
         except ValueError: # This catches empty strings and makes it so it keeps asking for input.
             index = index
         except: # Catch-all particularly KeyboardInterrupt.
-            print('\nCancelling...')
+            printAndLogInfo('\nCancelling...')
             exit()
 
         update(search_results[index])
@@ -531,10 +528,10 @@ def main(): # For debugging specific functions
 
 bytes = 0 # Keep track of bytes used.
 @click.command()
-@click.option('--manga_site', default='mangabee', help='mangahere mangabee\n Usage: mangaget.py --manga_site mangabee bleach')
-@click.option('--check', default=False, help='Download manga chapters you are missing. And download missing pages for each chapter.\n Usage: mangaget.py --check=True naruto')
-@click.option('--no_dl', default=0, help='Just searches but does not download.\n Usage: mangaget --no_dl=1 hajime_no_ippo')
-@click.option('--select', default=0, nargs=2, type=int, help='from chapter [INT] to chapter [INT]. If you want to download only one chapter, make FROM and TO the same. E.g (5, 5)\n Usage: mangaget --select 1 3 naruto')
+@click.option('--manga_site', default='mangahere', help='mangahere mangabee\n Usage: mangaget.py --manga_site mangabee bleach')
+@click.option('--check', default=False, help='Download ALL manga chapters you are missing. And redownloads chapter if it is missing pages. Gives a choice if there are similar manga names.\n Usage: mangaget.py --check=True naruto')
+@click.option('--no_dl', default=0, help='Just searches but does not download. Gives a choice if there are similar manga names.\n Usage: mangaget --no_dl=1 hajime_no_ippo')
+@click.option('--select', default=0, nargs=2, type=int, help='from chapter [INT] to chapter [INT]. If you want to download only one chapter, make FROM and TO the same. E.g (5, 5). Gives a choice if there are similar manga names.\n Usage: mangaget --select 1 3 naruto')
 @click.argument('search_term')
 
 def mangaget(search_term, select, manga_site, no_dl, check):
@@ -563,24 +560,24 @@ def mangaget(search_term, select, manga_site, no_dl, check):
         search_results = search(search_term, manga_site)
         printAndLogInfo("".join(['Searching ', search_term, ' on ', manga_site, '...\n']))
         if (search_results):
-            if (len(search_results) == 1): # only one choice so..
-                print("".join(['Found ', search_results[0], '\n']))
-                logging.info("".join(['Found ', search_results[0]]))
-                index = 0
-            else:
-                while index >= len(search_results):
-                    print('Pick a mangalink: ')
-                    for i in range(0, len(search_results)): # Make sure it's within our search results.
-                        print("".join([str(i), '. ', search_results[i]]))
-                    try:
-                        index = int(input('Enter a number: ')) # Get the number.
-                    except (KeyboardInterrupt, SystemExit): # This catches empty strings and makes it so it keeps asking for input.
-                        raise
-                    except ValueError: # This catches empty strings and makes it so it keeps asking for input.
-                        index = index
-                    except: # Catch-all particularly KeyboardInterrupt.
-                        print('\nCancelling...')
-                        exit()
+            # if (len(search_results) == 1): # only one choice so..
+            #     print("".join(['Found ', search_results[0], '\n']))
+            #     logging.info("".join(['Found ', search_results[0]]))
+            #     index = 0
+            # else:
+            while index >= len(search_results):
+                print('Pick a mangalink: ')
+                for i in range(0, len(search_results)): # Make sure it's within our search results.
+                    print("".join([str(i), '. ', search_results[i]]))
+                try:
+                    index = int(input('Enter a number: ')) # Get the number.
+                except (KeyboardInterrupt, SystemExit): # This catches empty strings and makes it so it keeps asking for input.
+                    raise
+                except ValueError: # This catches empty strings and makes it so it keeps asking for input.
+                    index = index
+                except: # Catch-all particularly KeyboardInterrupt.
+                    printAndLogInfo('\nCancelling...')
+                    exit()
             logging.info("".join([timestamp(), ' Search Returned: ', search_results[0]]))
         else:
             printAndLogInfo("".join(['Searching \'', search_term, '\' did not return anything. Exiting...']))
@@ -590,7 +587,7 @@ def mangaget(search_term, select, manga_site, no_dl, check):
             exit()
 
         setup = beginDownloading(search_results[index], manga_site) # Initialize the downloading process.
-        # pprint(setup)
+
         if (manga_site == 'mangahere'):
             chapter_json_file = createMasterChapterIntegrityFile(setup, manga_site)
             updateIntegrityFiles(chapter_json_file.get('file_path'))
@@ -604,7 +601,7 @@ def mangaget(search_term, select, manga_site, no_dl, check):
         else:
             pass
 
-    printAndLogInfo("".join([timestamp(), ' Finished... ', 'Usage: ', str(sizeMegs(bytes)), 'M']))
+    printAndLogInfo("".join([timestamp(), ' Finished... ', 'Usage: ', str(sizeMegs(bytes)), 'MB']))
     printAndLogInfo("".join([timestamp(), ' Finished... ', 'Usage: ', str(sizeKilo(bytes)), 'KB', '\n']))
 
 if __name__ == "__main__":
