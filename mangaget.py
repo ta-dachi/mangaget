@@ -80,9 +80,9 @@ def beginDownloading(url, manga_site): # 1 request.
         parser.feed(req.text)
 
         chapter_numbers = [e for e in parser.chapters if 'Raw' not in e] # all chapters with Raw are untranslated so filter them out.
-        chapter_numbers = [e[:3] for e in parser.chapters]
-        chapter_numbers = [onlyNumbers(e) for e in chapter_numbers] # Leave only the numbers and strip chracters
-        chapter_numbers = sorted(filter(None, chapter_numbers), key=int)
+        chapter_numbers = [e[:4] for e in parser.chapters]
+        chapter_numbers = [onlyNumbers(e) for e in chapter_numbers] # Leave only the numbers floats and strip chracters such as -, whitespace.
+        chapter_numbers = sorted(filter(None, chapter_numbers), key=float)
 
         for chapter_number in chapter_numbers:
             chapter_urls.append( "".join([url, chapter_number]))
@@ -145,7 +145,7 @@ def createMasterChapterIntegrityFile(setup, manga_site): # 0 http requests.
 
     data['chapter_urls']        = chapter_urls
     data['chapter_directories'] = sorted(chapter_directories)
-    data['chapter_numbers']     = sorted(chapter_numbers, key=int)
+    data['chapter_numbers']     = sorted(chapter_numbers, key=float)
     data['root_directory']      = root_directory
     data['base_directory']      = base_directory
     data['chapter_json_files']  = sorted(chapter_json_files)
@@ -478,7 +478,8 @@ def mangahere_urlify(s):
     return s
 
 def onlyNumbers(s):
-    s = re.sub(r'[^\d.]+', '', s) # Remove all characters and whitespace
+    s = re.sub(r'[a-zA-Z\s-]+', '', s) # Remove all characters and whitespace and hyphens
+    # s = re.sub(r'[^\d.]+', '', s) # Remove all characters and whitespace
     return s
 
 def onlyNumbersSplit(s):
