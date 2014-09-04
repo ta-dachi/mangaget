@@ -2,8 +2,8 @@ mangaget
 ===========
 
 #### Features
-- Download all chapters of a manga on mangahere or mangabee
-- Download in ranges (1-10, 14) or (3 ,5, 10, 2-10) *(3, 3) for a single chapter.
+- Download all chapters of a manga on mangahere or mangabee.
+- Download in ranges (1-10, 14) or (3 ,5, 10, 2-10), *(3, 3) for a single chapter.
 - Integrity files and checks for manga chapters, which re-downloads chapters with missing pages.
 - Auto-updates and downloads the latest chapters upon searching again.
 - Does not re-download chapters that are already downloaded.
@@ -21,8 +21,6 @@ Run build.bat or build.sh if you're on linux. It installs required python framew
 ```bash
 ./build.sh
 ```
-
-
 
 #### Example usage for downloading all chapters:
 ```bash
@@ -105,10 +103,14 @@ Usage: mangaget.py [OPTIONS] SEARCH_TERM
 
   A program that downloads manga from mangahere and mangabee.
 
+Usage: mangaget.py [OPTIONS] SEARCH_TERM
+
+  A program that downloads manga from mangahere and mangabee.
+
 Options:
-  --manga_site TEXT    mangahere mangabee
-                       Usage: mangaget.py --manga_site
-                       mangabee bleach
+  --manga_site TEXT    Sites to choose from: mangahere mangabee
+                       Usage:
+                       mangaget.py --manga_site=mangabee bleach
   --check TEXT         Download ALL manga chapters you are missing. And
                        redownloads chapter if it is missing pages. Gives a
                        choice if there are similar manga names.
@@ -116,12 +118,11 @@ Options:
                        mangaget.py --check=True naruto
   --no_dl INTEGER      Just searches but does not download. Gives a choice if
                        there are similar manga names.
-                       Usage: mangaget
-                       --no_dl=1 hajime_no_ippo
   --select INTEGER...  from chapter [INT] to chapter [INT]. If you want to
                        download only one chapter, make FROM and TO the same.
                        E.g (5, 5). Gives a choice if there are similar manga
                        names.
-                       Usage: mangaget --select 1 3 naruto
+                       Usage:
+                       mangaget --select 1 3 naruto
   --help               Show this message and exit.
 ```
