@@ -52,16 +52,16 @@ def search(manga_name, manga_site): # 1 request.
         return False
 
     parser.feed(req)         # req contains all the html from url.
-    results = parser.urls   # Save our results.
+    results = parser.urls    # Save our results.
     parser.close             # Free the parser resource.
 
     return results # ['http://www.mangahere.co/manga/boku_to_kanojo_no_game_sensou/', 'http://www.mangahere.co/manga/no_game_no_life/', 'http://www.mangahere.co/manga/ore_to_ichino_no_game_doukoukai_katsudou_nisshi/']
 
 def beginDownloading(url, manga_site): # 1 request.
-    src      = None # Mangabee
+    src      = None
     chapters = None
     pages    = None
-    urls     = None # Mangahere
+    urls     = None
 
     if (manga_site == 'mangahere'):
         parser = mangahereVolumeChapterParser() # Grabs all the chapters from the manga's html page.
@@ -79,7 +79,7 @@ def beginDownloading(url, manga_site): # 1 request.
 
         parser.feed(req.text)
 
-        chapter_numbers = [e for e in parser.chapters if 'Raw' not in e] # all chapters with Raw are untranslated so filter them out.
+        # chapter_numbers = [e for e in parser.chapters if 'Raw' not in e] # all chapters with Raw are untranslated so filter them out.
         chapter_numbers = [e[:4] for e in parser.chapters]
         chapter_numbers = [onlyNumbers(e) for e in chapter_numbers] # Leave only the numbers floats and strip chracters such as -, whitespace.
         chapter_numbers = sorted(filter(None, chapter_numbers), key=float)
@@ -126,15 +126,22 @@ def createMasterChapterIntegrityFile(setup, manga_site): # 0 http requests.
         os.mkdir(base_directory) # ..mangahere/tokyo_ghouls/ ..mangabee/tokyo_ghouls/
         logging.info("".join([timestamp(), ' Created directory: ', base_directory]))
 
-    for i in range( 0, len(chapter_urls) ):
-        if (manga_site == 'mangahere'):
+    if (manga_site == 'mangahere'):
+        for i in range( 0, len(chapter_urls) ):
             chapter_number = chapter_urls[i].rsplit('/',2)[1] # Use the part of the url for chapter numbering instead of var i in the for loop.
             chapter_directory = os.path.join( base_directory, "".join( [manga_name, '_', chapter_number] ) )  # 'mangahere\Tokyo_Ghoul\Tokyo_Ghoul\Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
-        elif (manga_site == 'mangabee'):
+            chapter_directories.append(chapter_directory)
+            chapter_numbers.append(chapter_number)
+        # chapter_numbers = sorted(chapter_numbers, key=int)
+        chapter_numbers = sorted(chapter_numbers)
+        # print(chapter_numbers)
+    elif (manga_site == 'mangabee'):
+        for i in range( 0, len(chapter_urls) ):
             chapter_number = chapter_urls[i].rsplit('/',1)[1]
             chapter_directory = os.path.join( base_directory, "".join([manga_name, '_', mangaNumbering(str(chapter_number))]) ) # 'manga/Tokyo_Ghoul/Tokyo_Ghoul/Tokyo_Ghoul_001 ... Tokyo_Ghoul_019 ... Tokyo_Ghoul_135'
-        chapter_directories.append(chapter_directory)
-        chapter_numbers.append(chapter_number)
+            chapter_directories.append(chapter_directory)
+            chapter_numbers.append(chapter_number)
+        chapter_numbers = sorted(chapter_numbers, key=float)
 
     for i in range( 0, len(chapter_urls) ):
         if not os.path.exists(chapter_directories[i]):
@@ -143,17 +150,18 @@ def createMasterChapterIntegrityFile(setup, manga_site): # 0 http requests.
 
     file_path = os.path.join( root_directory, "".join([manga_name, '_', 'chapters.json']) )
 
-    data['chapter_urls']        = chapter_urls
+    data['chapter_urls']        = chapter_urls #sorted(chapter_urls)
     data['chapter_directories'] = sorted(chapter_directories)
-    data['chapter_numbers']     = sorted(chapter_numbers, key=float)
+    data['chapter_numbers']     = chapter_numbers
     data['root_directory']      = root_directory
     data['base_directory']      = base_directory
-    data['chapter_json_files']  = sorted(chapter_json_files)
+    data['chapter_json_files']  = chapter_json_files
     data['manga_name']          = manga_name
     data['search_url']          = search_url
     data['file_path']           = file_path
     writeToJson(data, file_path) # ../mangahere/akame_ga_kiru_chapters.json
-
+    # pprint(data)
+    # exit()
     return data
 
 def updateIntegrityFiles(chapters_json_file):
@@ -165,33 +173,31 @@ def updateIntegrityFiles(chapters_json_file):
     chapter_urls       = data.get('chapter_urls')
     manga_name         = data.get('manga_name')
     manga_site         = data.get('root_directory')
-    printAndLogInfo("".join([timestamp(), ' Buildling chapter integrity files. This can take awhile if there are many chapters. e.g 100+...']))
+    printAndLogInfo("".join([timestamp(), ' Building chapter integrity files. This can take awhile if there are many chapters. e.g 100+...']))
     for i in range(0, len(updated_json_files)):
-    # for i in range(0, 1):
+    # for i in range(0, 1): # Testing one chapter.
         if (os.path.isfile(updated_json_files[i])):
             pass
         else:
             if (manga_site == 'mangahere'):
                 chapter_directory = os.path.join( base_directory, "".join( [manga_name, '_', chapter_numbers[i]] ) )
-                createIntegrityChapterJsonFile(chapter_urls[i], base_directory, chapter_directory, chapter_numbers[i], manga_site)
+                createIntegrityChapterJsonFile(chapter_urls[i], base_directory, chapter_directory, chapter_numbers[i], updated_json_files[i], manga_site)
                 printAndLogInfo("".join([timestamp(), ' Created ', updated_json_files[i]]))
             elif (manga_site == 'mangabee'):
                 chapter_directory = os.path.join( base_directory, "".join( [manga_name, '_', mangaNumbering(str(chapter_numbers[i]))] ) )
-                createIntegrityChapterJsonFile(chapter_urls[i], base_directory, chapter_directory, chapter_numbers[i], manga_site)
+                createIntegrityChapterJsonFile(chapter_urls[i], base_directory, chapter_directory, chapter_numbers[i], updated_json_files[i], manga_site)
                 printAndLogInfo("".join([timestamp(), ' Created ', updated_json_files[i]]))
-
     return True
 
-def createIntegrityChapterJsonFile(chapter_url, base_directory, directory, chapter_number, manga_site):
+def createIntegrityChapterJsonFile(chapter_url, base_directory, directory, chapter_number, chapter_json_file, manga_site):
     pages_and_src     = []
     page_urls         = [] # Holds a reference to the image on mangahere's CDN. You need to parse its HTML for that CDN image link.
     page_numbers      = []
     pages_src         = [] # Holds all the urls to the images on Mangahere's CDN.
     image_files_paths = []
 
-    req = requestWithHeaders(chapter_url) # 1 requests
+    req = requestWithHeaders(chapter_url)  # 1 requests
 
-    parser = mangahereHTMLGetImageUrls()
     if (manga_site == 'mangahere'):
         parser = mangahereHTMLGetImageUrls()
         parser.feed(req.text)
@@ -222,7 +228,7 @@ def createIntegrityChapterJsonFile(chapter_url, base_directory, directory, chapt
     if ( len(pages_and_src) == len(image_files_paths) == len(page_urls) == len(page_numbers) ): # Number of items in each match so proceed.
         data = generateChapterIntegrityData(directory, base_directory, chapter_url, image_files_paths, pages_and_src, pages_src, length, chapter_number , 'Not Downloaded.')
 
-        writeToJson(data, "".join([directory, '.json']))
+        writeToJson(data, chapter_json_file)
     else:
         logging.debug("".join([timestamp(), ' Number of image_srcs, file_paths, and page_urls do not match. Check page numbering for that chapter on mangahere', image_files_paths[0]]))
         return False
@@ -236,27 +242,27 @@ def mangaDownload(master_json_file, index=0):
         chapter_url       = data.get('chapter_url')
         base_directory    = data.get('base_directory')
         directory         = data.get('directory')
+
         if (data['downloaded'] == 'Not Downloaded.'):
             printAndLogInfo("".join(['Downloading ', data.get('chapter_url'), ' ...']))
-
             downloadConcurrently( pages_src, image_files_paths )
             data['downloaded'] = 'Downloaded'
             logging.info("".join([timestamp(), ' ', chapter_url, ' successfully downloaded.']))
             seconds = str(randomSleep(3,5)) # Introduce an artificial delay after you downloaded a whole chapter.
-            print("".join(['Downloaded, now waiting ', seconds, ' seconds to prevent being timedout by server...']))
+            print("".join(['Downloaded. Waited ', seconds, ' seconds to prevent being timedout by server...']))
             writeToJson(data, "".join([directory, '.json']))
         else:
             print("".join([chapter_url, ' Already downloaded']))
 
     master_json_data = open(master_json_file).read()
     master_data = json.loads(master_json_data)
-
-    if (not index):
+    if (not index): # If there isn't a chapter range specified
         for json_file in master_data.get('chapter_json_files'):
+
             json_data = open(json_file).read()
             data = json.loads(json_data)
             download(data)
-    else:
+    else: # If there is a chapter range specified: (1, 3) = chapters from 1 to 3 download.
         i = 0
         for json_file in master_data.get('chapter_json_files'):
             if i in range(index[0]-1, index[1]):
@@ -306,26 +312,20 @@ def buildPagesAndSrc(page_urls, page_numbers, manga_site): # Multiple Requests.
     return pages_and_src
 
 def checkChapterIntegrity(search_string, manga_site):
-    def update(search_result):
+    def update(search_result, manga_site):
         master_json_file = "".join([search_result, '_', 'chapters.json'])
         json_data = open(master_json_file).read() # akame_ga_kiru_chapters.json
         data = json.loads(json_data)
 
-        parser = mangahereVolumeChapterParser() # Grabs all the chapters from the manga's html page.
-        req = requestWithHeaders(data.get('search_url'))
-        parser.feed(req.text)
-        urls = parser.urls
-        setup = dict(chapter_urls=urls, search_url=data.get('search_url'))
-        parser.close
+        setup = dict(chapter_urls=data.get('chapter_urls'), search_url=data.get('search_url'))
 
-        createMasterChapterIntegrityFile(setup)
+        createMasterChapterIntegrityFile(setup, manga_site)
         updateIntegrityFiles(master_json_file)
 
     search_string = "".join(['*',search_string,'*'])
     if (manga_site == 'mangahere'):
         search_results = glob.glob("".join(os.path.join('mangahere',search_string)))
     elif (manga_site == 'mangabee'):
-        # print(search_string)
         search_results = glob.glob("".join(os.path.join('mangabee',search_string)))
     else:
         printAndLogInfo( "".join(['No such manga site.']) )
@@ -337,13 +337,14 @@ def checkChapterIntegrity(search_string, manga_site):
 
     if (len(search_results) == 1): # only one choice so..
 
-        update(search_results[0])
+        update(search_results[0], manga_site)
         json_files = glob.glob(os.path.join(search_results[0], '*.json'))
 
         for json_file in json_files:
-            # verify(json_file)
+            verify(json_file)
             pass
 
+    # Example choices:
     # 0. mangahere\muvluv_alternative
     # 1. mangahere\muvluv_alternative_total_eclipse
     elif (len(search_results) > 1):
@@ -365,7 +366,7 @@ def checkChapterIntegrity(search_string, manga_site):
         json_files = glob.glob(os.path.join(search_results[index], '*.json'))
         if (json_files):
             for json_file in json_files:
-                # verify(json_file)
+                verify(json_file)
                 pass
         else:
             printAndLogInfo("".join([timestamp(), ' No integrity json file found in ',search_results[index], '.']))
@@ -478,7 +479,7 @@ def mangahere_urlify(s):
     return s
 
 def onlyNumbers(s):
-    s = re.sub(r'[a-zA-Z\s-]+', '', s) # Remove all characters and whitespace and hyphens
+    s = re.sub(r'[a-zA-Z\s-]+', '', s) # Remove all characters and whitespace and hyphens.
     # s = re.sub(r'[^\d.]+', '', s) # Remove all characters and whitespace
     return s
 
@@ -521,17 +522,12 @@ def imageFileCount(path):
     img_files = glob.glob(os.path.join(path, '*.jpg'))
     return len(img_files)
 
-###
-### Main
-###
-def main(): # For debugging specific functions
-    pass
 
 bytes = 0 # Keep track of bytes used.
 @click.command()
 @click.option('--manga_site', default='mangahere', help='mangahere mangabee\n Usage: mangaget.py --manga_site mangabee bleach')
 @click.option('--check', default=False, help='Download ALL manga chapters you are missing. And redownloads chapter if it is missing pages. Gives a choice if there are similar manga names.\n Usage: mangaget.py --check=True naruto')
-@click.option('--no_dl', default=0, help='Just searches but does not download. Gives a choice if there are similar manga names.\n Usage: mangaget --no_dl=1 hajime_no_ippo')
+@click.option('--no_dl', default=0, help='Just searches but does not download. Gives a choice if there are similar manga names.\n Usage: mangaget --no_dl=True hajime_no_ippo')
 @click.option('--select', default=0, nargs=2, type=int, help='from chapter [INT] to chapter [INT]. If you want to download only one chapter, make FROM and TO the same. E.g (5, 5). Gives a choice if there are similar manga names.\n Usage: mangaget --select 1 3 naruto')
 @click.argument('search_term')
 
@@ -561,11 +557,6 @@ def mangaget(search_term, select, manga_site, no_dl, check):
         search_results = search(search_term, manga_site)
         printAndLogInfo("".join(['Searching ', search_term, ' on ', manga_site, '...\n']))
         if (search_results):
-            # if (len(search_results) == 1): # only one choice so..
-            #     print("".join(['Found ', search_results[0], '\n']))
-            #     logging.info("".join(['Found ', search_results[0]]))
-            #     index = 0
-            # else:
             while index >= len(search_results):
                 print('Pick a mangalink: ')
                 for i in range(0, len(search_results)): # Make sure it's within our search results.
@@ -604,6 +595,12 @@ def mangaget(search_term, select, manga_site, no_dl, check):
 
     printAndLogInfo("".join([timestamp(), ' Finished... ', 'Usage: ', str(sizeMegs(bytes)), 'MB']))
     printAndLogInfo("".join([timestamp(), ' Finished... ', 'Usage: ', str(sizeKilo(bytes)), 'KB', '\n']))
+
+###
+### Main
+###
+def main(): # For debugging specific functions
+    pass
 
 if __name__ == "__main__":
     # main() # For debugging specific functions
