@@ -6,6 +6,7 @@ setlocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 pip install requests
 pip install eventlet
 pip install click
+pip install natsort
 
 REM Don't persist setlocals.
 endlocal
