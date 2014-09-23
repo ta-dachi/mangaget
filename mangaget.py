@@ -1,20 +1,14 @@
 import sys
 import os
-import re
-import json
-import time
 import logging
-import datetime
 import glob
 import fnmatch
-from pprint import pprint
-from random import randint
 
 import concurrent.futures
-import urllib.request
 import urllib.parse
 import gzip
 import natsort
+from pprint import pprint
 
 # Pip install frameworks.
 import requests
@@ -24,6 +18,11 @@ import click
 # Custom parsers.
 from mangabee_parsers import *
 from mangahere_parsers import *
+
+# Helpers.
+from helper import *
+
+
 
 ###
 ### Config
@@ -57,6 +56,7 @@ def search(manga_name, manga_site): # Makes 1 http request..
     parser.close             # Free the parser resource.
 
     return results # Example: ['http://www.mangahere.co/manga/boku_to_kanojo_no_game_sensou/', 'http://www.mangahere.co/manga/no_game_no_life/', 'http://www.mangahere.co/manga/ore_to_ichino_no_game_doukoukai_katsudou_nisshi/']
+
 
 def initializeSetup(url, manga_site): # Makes 1 http request..
     src      = None
@@ -94,6 +94,7 @@ def initializeSetup(url, manga_site): # Makes 1 http request..
     else:
         printAndLogInfo("".join(['Not a valid manga site: ', manga_site, '. Try \'mangabee\' or \'mangahere\'']))
         return False
+
 
 def createMasterChapterIntegrityFile(setup, manga_site): # 0 http requests.
     chapter_urls        = natsort.natsorted(setup.get('chapter_urls')) # Nat sort because chapters can be named like this: c1, c2.. or 1, 2, 3..
@@ -164,7 +165,8 @@ def createMasterChapterIntegrityFile(setup, manga_site): # 0 http requests.
 
     return data #Json data.
 
-def updateIntegrityFiles(chapters_json_file):
+
+def updateIntegrityFiles(chapters_json_file, start=0, end=0): #Gets the manga_site from the master integrity file.
     json_data = open(chapters_json_file).read()
     data = json.loads(json_data)
     updated_json_files = data.get('chapter_json_files')
@@ -174,7 +176,12 @@ def updateIntegrityFiles(chapters_json_file):
     manga_name         = data.get('manga_name')
     manga_site         = data.get('root_directory')
     printAndLogInfo("".join([timestamp(), ' Building chapter integrity files. This can take awhile if there are many chapters. e.g 100+...']))
-    for i in range(0, len(updated_json_files)):
+    if (end == 0 or end >= len(updated_json_files)):
+        end = len(updated_json_files)
+    if (start > 0):
+        start -= 1
+    #print("".join([str(start), ' and ', str(end)]))
+    for i in range(start, end):
     # for i in range(0, 1): # Testing one chapter.
         if (os.path.isfile(updated_json_files[i])):
             pass
@@ -188,6 +195,7 @@ def updateIntegrityFiles(chapters_json_file):
                 createIntegrityChapterJsonFile(chapter_urls[i], base_directory, chapter_directory, chapter_numbers[i], updated_json_files[i], manga_site)
                 printAndLogInfo("".join([timestamp(), ' Created ', updated_json_files[i]]))
     return True
+
 
 def createIntegrityChapterJsonFile(chapter_url, base_directory, directory, chapter_number, chapter_json_file, manga_site):
     pages_and_src     = []
@@ -210,13 +218,13 @@ def createIntegrityChapterJsonFile(chapter_url, base_directory, directory, chapt
         for page_number in page_numbers:
             page_urls.append("".join([chapter_url, '/', page_number]))
 
-    parser.close
+    parser.close # Close parser to free it.
 
     for page in page_numbers:
         file_path = "".join([directory, '\\', mangaNumbering(page), '.jpg'])
         image_files_paths.append( file_path )
 
-    pages_and_src = buildPagesAndSrc(page_urls, page_numbers, manga_site)
+    pages_and_src = buildPagesAndSrc(page_urls, page_numbers, manga_site) # Makes multiple requests
     pages_and_src = sorted(pages_and_src, key=lambda k: k['page'])
 
     for dic in pages_and_src:
@@ -235,6 +243,7 @@ def createIntegrityChapterJsonFile(chapter_url, base_directory, directory, chapt
 
     return True
 
+
 def downloadManga(master_json_file, index=0):
     def download(data):
         pages_src         = data.get('pages_src')
@@ -248,7 +257,7 @@ def downloadManga(master_json_file, index=0):
             downloadConcurrently( pages_src, image_files_paths )
             data['downloaded'] = 'Downloaded'
             logging.info("".join([timestamp(), ' ', chapter_url, ' successfully downloaded.']))
-            seconds = str(randomSleep(3,5)) # Introduce an artificial delay after you downloaded a whole chapter.
+            seconds = str(randomSleep(1,2)) # Introduce an artificial delay after you downloaded a whole chapter.
             print("".join(['Downloaded. Waited ', seconds, ' seconds to prevent being timedout by server...']))
             writeToJson(data, "".join([directory, '.json']))
         else:
@@ -258,7 +267,11 @@ def downloadManga(master_json_file, index=0):
     master_data = json.loads(master_json_data)
     if (not index): # If there isn't a chapter range specified
         for json_file in master_data.get('chapter_json_files'):
-
+            json_data = open(json_file).read()
+            data = json.loads(json_data)
+            download(data)
+    elif(index[0] == 0 and index[0] == 0):
+        for json_file in master_data.get('chapter_json_files'):
             json_data = open(json_file).read()
             data = json.loads(json_data)
             download(data)
@@ -271,7 +284,6 @@ def downloadManga(master_json_file, index=0):
                 download(data)
             i += 1
 
-    pass
 
 def generateChapterIntegrityData(directory, base_directory, chapter_url, image_files_paths, pages_and_src, pages_src, length, chapter_number , downloaded):
     data = {}
@@ -288,6 +300,7 @@ def generateChapterIntegrityData(directory, base_directory, chapter_url, image_f
 
     return data
 
+
 def buildPagesAndSrc(page_urls, page_numbers, manga_site): # Multiple Requests.
     pages_and_src = []
     if (manga_site == 'mangahere'):
@@ -296,7 +309,7 @@ def buildPagesAndSrc(page_urls, page_numbers, manga_site): # Multiple Requests.
         parser = mangabeeHTMLGetImageSrcs()
 
     ### Concurrently find image src on each html page. ###
-    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor: # Multiple requests.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor: # Multiple (small) requests. max_workers Was 15 but was too slow.
         # Download the load operations and mark each future with its URL
         future_to_url = {executor.submit(requestContentWithHeadersAndKey, url, page): [url,page] for url,page in zip(page_urls,page_numbers)}
         for future in concurrent.futures.as_completed(future_to_url):
@@ -309,7 +322,9 @@ def buildPagesAndSrc(page_urls, page_numbers, manga_site): # Multiple Requests.
             except Exception as exc:
                 printAndLogDebug( timestamp(), ' %r generated an exception: %s' % (url, exc) )
 
+
     return pages_and_src
+
 
 def checkChapterIntegrity(search_string, manga_site):
     def update(search_result, manga_site):
@@ -367,11 +382,11 @@ def checkChapterIntegrity(search_string, manga_site):
         if (json_files):
             for json_file in json_files:
                 verify(json_file)
-                pass
         else:
             printAndLogInfo("".join([timestamp(), ' No integrity json file found in ',search_results[index], '.']))
     else:
         printAndLogInfo("".join([timestamp(), ' No such manga found.']))
+
 
 def verify(json_file):
     json_data = open(json_file).read()
@@ -403,6 +418,7 @@ def verify(json_file):
         else:
             printAndLogDebug( "".join([timestamp(), ' ', data.get('directory'), ' Integrity check failed. Something went deeply wrong. File a bug report please.']) )
 
+
 def mangaNumbering(s):
     if (len(s) == 1):
         return "".join(['00',s])
@@ -414,16 +430,14 @@ def mangaNumbering(s):
     logging.info('Abnormal numbering encountered') # Multiple requests.
     return "".join(['0',s])
 
-def writeToJson(data, directory):
-    with open(directory, 'w') as outfile: # This file is used to manage the integrity of the chapter downloaded.
-        json.dump(data, outfile)
 
 def downloadConcurrently(urls, paths):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor: # Multiple requests.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor: # Multiple requests.
         for path,url in zip(paths, urls):
             executor.submit(requestFile, path, url)
             randomSleep(0,1)
     return True
+
 
 def requestFile(output, url):
     with open(output, 'wb') as f:
@@ -441,6 +455,7 @@ def requestFile(output, url):
 
     return True
 
+
 def requestWithHeaders(url):
     headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36',
                 'Content-Type':'text/plain; charset=utf-8', 'Accept':'*/*', 'Accept-Encoding':'gzip,deflate,sdch,text'}
@@ -449,6 +464,7 @@ def requestWithHeaders(url):
     writeBytes(sys.getsizeof(req)) # Add bandwidth usage (GZIP compressed.)
 
     return req
+
 
 def requestContentWithHeaders(url):
     headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36',
@@ -459,8 +475,8 @@ def requestContentWithHeaders(url):
 
     return req.text
 
+
 def requestContentWithHeadersAndKey(url, key):
-    global bytes
     headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.125 Safari/537.36',
                 'Content-Type':'text/plain; charset=utf-8', 'Accept':'*/*', 'Accept-Encoding':'gzip,deflate,sdch,text'}
     req = requests.get(url, headers = headers)
@@ -469,88 +485,44 @@ def requestContentWithHeadersAndKey(url, key):
 
     return {'page':key, 'html': req.text}
 
-def sortAlphanumeric(data):
-    data = sorted(data, key=lambda item: (int(item.partition(' ')[0])
-                if item[0].isdigit() else float('inf'), item))
-    pprint(data)
-    return data
-
-def mangabeeUrlify(s):
-    s = re.sub(r"[^\w\s-]", '', s) # Remove all non-word characters (everything except numbers and letters)
-    s = re.sub(r"\s+", '+', s)     # Replaces all runs of whitespace with a single +
-    return s
-
-def mangahereUrlify(s):
-    s = re.sub(r"[^/.\:\w\s-]", '', s) # Remove all non-word characters (everything except numbers and letters)
-    s = re.sub(r"\s+", '_', s)     # Replaces all runs of whitespace with a single _
-    return s
-
-def onlyNumbers(s):
-    s = re.sub(r'[a-zA-Z\s-]+', '', s) # Remove all characters and whitespace and hyphens.
-    # s = re.sub(r'[^\d.]+', '', s) # Remove all characters and whitespace
-    return s
-
-def onlyNumbersSplit(s):
-    return s.split(' ', 1)[0]
 
 def writeBytes(b):
-    global bytes
-    bytes += b
-
-def resetBytesUsage():
-    global bytes
-    bytes = 0
-
-def sizeMegs(bytes):
-    return bytes/1000000
-
-def sizeKilo(bytes):
-    return bytes/1000
-
-def randomSleep(start, to):
-    num = randint(start,to)
-    time.sleep(num)
-    return num
+     global bytes
+     bytes += b
 
 def printAndLogInfo(string):
     print(string)
     logging.info(string)
-    pass
 
 def printAndLogDebug(string):
     print(string)
     logging.debug(string)
-    pass
-
-def timestamp():
-    return str(datetime.datetime.fromtimestamp(time.time()).strftime('[%Y-%m-%d %H:%M:%S]'))
-
-def imageFileCount(path):
-    img_files = glob.glob(os.path.join(path, '*.jpg'))
-    return len(img_files)
-
 
 bytes = 0 # Keep track of bytes used.
+
 @click.command()
-@click.option('--manga_site', default='mangahere', help='mangahere mangabee\n Usage: mangaget.py --manga_site mangabee bleach')
-@click.option('--check', default=False, help='Download ALL manga chapters you are missing. And redownloads chapter if it is missing pages. Gives a choice if there are similar manga names.\n Usage: mangaget.py --check=True naruto')
-@click.option('--no_dl', default=0, help='Just searches but does not download. Gives a choice if there are similar manga names.\n Usage: mangaget --no_dl=True hajime_no_ippo')
-@click.option('--select', default=0, nargs=2, type=int, help='from chapter [INT] to chapter [INT]. If you want to download only one chapter, make FROM and TO the same. E.g (5, 5). Gives a choice if there are similar manga names.\n Usage: mangaget --select 1 3 naruto')
+@click.option('--manga_site', default='mangahere', help='Usage: mangaget.py --manga_site=mangabee bleach\nAvailable: mangahere mangabeet')
+@click.option('--check', default=False, help='Usage: mangaget.py --check=True naruto\nDownload ALL manga chapters you are missing. And redownloads chapter if it is missing pages. Gives a choice if there are similar manga names.')
+@click.option('--no_dl', default=0, help='Usage: mangaget --no_dl=True naruto\nJust searches.')
+@click.option('--select', default=(0,0), nargs=2, type=int, help='Usage: mangaget --select 1 3 naruto\n...--select 4 4 ...\t\t\tto download only chapter 4')
 @click.argument('search_term')
 
 def mangaget(search_term, select, manga_site, no_dl, check):
-    """A program that downloads manga from mangahere and mangabee."""
     global bytes
+    """A program that downloads manga from mangahere and mangabee."""
     index = 888
 
     if (select):
         if (select[1] < select[0]):
-            print('Not a valid manga range. FROM should be lower than TO. E.g (1, 10) not (10, 1).')
-            print('If you want to download only one chapter, make FROM and TO the same. E.g (5, 5)')
+            print('Not a valid manga range. try ...--select 1 3... downloads chapters 1 to 3')
+            print('If you want to download only one chapter, try ...--select 5 5...')
             exit()
-        elif (select[0] < 1 or select[1] < 1):
-            print('Range cannot be 0 or negative.')
+        elif (select[0] < 0 or select[1] < 0):
+            print('Range cannot be negative.')
             exit()
+        elif (select[0] == 0 and select[1] >= 0):
+            #print('Generating integrity json files for all chapters..')
+            pass
 
     if (manga_site == 'mangahere' or manga_site == 'mangabee'):
         pass
@@ -587,7 +559,7 @@ def mangaget(search_term, select, manga_site, no_dl, check):
 
         setup = initializeSetup(search_results[index], manga_site) # Initialize the downloading process.
         chapter_json_file = createMasterChapterIntegrityFile(setup, manga_site)
-        updateIntegrityFiles(chapter_json_file.get('file_path'))
+        updateIntegrityFiles(chapter_json_file.get('file_path'), select[0], select[1])
         downloadManga(chapter_json_file.get('file_path'), select)
 
     printAndLogInfo("".join([timestamp(), ' Finished... ', 'Usage: ', str(sizeMegs(bytes)), 'MB']))
